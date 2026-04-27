@@ -8,6 +8,9 @@ from django.db import models
 
 class JobSource(models.TextChoices):
     MANUAL = "manual", "Manual"
+    ADZUNA = "adzuna", "Adzuna"
+    JOOBLE = "jooble", "Jooble"
+    CAREERJET = "careerjet", "Careerjet"
     LINKEDIN = "linkedin", "LinkedIn"
     INDEED = "indeed", "Indeed"
     GLASSDOOR = "glassdoor", "Glassdoor"

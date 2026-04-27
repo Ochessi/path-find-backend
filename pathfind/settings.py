@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "corsheaders",
     "storages",
+    "django_celery_beat",
     # Local apps
     "accounts",
     "jobs",
@@ -235,3 +236,53 @@ else:
     MEDIA_URL = "/media/"
     MEDIA_ROOT = BASE_DIR / "media"
 
+
+# ---------------------------------------------------------------------------
+# Celery — task queue & scheduled jobs
+# ---------------------------------------------------------------------------
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
+
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
+
+# Use django_celery_beat's DB-backed scheduler so beat can be managed via admin.
+CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
+
+# Periodic task schedule: fetch from each job-board API every 8 hours.
+from celery.schedules import crontab  # noqa: E402
+
+CELERY_BEAT_SCHEDULE = {
+    "fetch-adzuna-jobs-every-8h": {
+        "task": "jobs.fetch_adzuna_jobs",
+        "schedule": crontab(minute=0, hour="*/8"),
+    },
+    "fetch-jooble-jobs-every-8h": {
+        "task": "jobs.fetch_jooble_jobs",
+        "schedule": crontab(minute=15, hour="*/8"),  # offset by 15 min to spread load
+    },
+    "fetch-careerjet-jobs-every-8h": {
+        "task": "jobs.fetch_careerjet_jobs",
+        "schedule": crontab(minute=30, hour="*/8"),  # offset by 30 min to spread load
+    },
+}
+
+# ---------------------------------------------------------------------------
+# Job-board API credentials
+# (leave blank in .env until you obtain the keys — providers are skipped
+#  gracefully when their keys are missing)
+# ---------------------------------------------------------------------------
+
+# Adzuna — https://developer.adzuna.com/
+ADZUNA_APP_ID = os.getenv("ADZUNA_APP_ID", "")
+ADZUNA_APP_KEY = os.getenv("ADZUNA_APP_KEY", "")
+ADZUNA_COUNTRY = os.getenv("ADZUNA_COUNTRY", "gb")  # ISO 3166-1 alpha-2
+
+# Jooble — https://jooble.org/api/about
+JOOBLE_API_KEY = os.getenv("JOOBLE_API_KEY", "")
+
+# Careerjet — https://www.careerjet.com/partners/api/
+CAREERJET_AFFID = os.getenv("CAREERJET_AFFID", "")
+CAREERJET_LOCALE = os.getenv("CAREERJET_LOCALE", "en_GB")
