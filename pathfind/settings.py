@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.postgres",   # ArrayField for embedding vectors
     # Third-party
     "rest_framework",
     "rest_framework_simplejwt",
@@ -267,7 +268,46 @@ CELERY_BEAT_SCHEDULE = {
         "task": "jobs.fetch_careerjet_jobs",
         "schedule": crontab(minute=30, hour="*/8"),  # offset by 30 min to spread load
     },
+    # Nightly back-fill: encode any job listings that slipped through the
+    # post-save signal (e.g. bulk inserts from the ingestion pipeline).
+    "recompute-missing-embeddings-daily": {
+        "task": "jobs.recompute_all_embeddings",
+        "schedule": crontab(minute=0, hour=3),  # 3 AM UTC
+    },
 }
+
+# ---------------------------------------------------------------------------
+# Django Cache — used by CuratedFeedView to store per-user profile vectors
+# and avoid redundant SBERT inference on every request.
+#
+# Production: uses Redis (same instance as Celery broker, zero extra infra).
+# Development: falls back to LocMemCache if django-redis is not installed.
+# ---------------------------------------------------------------------------
+_redis_url = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
+
+try:
+    import django_redis  # noqa: F401  — imported only to test availability
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": _redis_url,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                # Pickle serialiser preserves numpy arrays correctly.
+                "SERIALIZER": "django_redis.serializers.pickle.PickleSerializer",
+            },
+            "KEY_PREFIX": "pathfind",
+            "TIMEOUT": 3600,  # default TTL: 1 hour
+        }
+    }
+except ImportError:
+    # Fallback for environments where django-redis is not installed yet.
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "pathfind-default",
+        }
+    }
 
 # ---------------------------------------------------------------------------
 # Job-board API credentials
@@ -286,3 +326,12 @@ JOOBLE_API_KEY = os.getenv("JOOBLE_API_KEY", "")
 # Careerjet — https://www.careerjet.com/partners/api/
 CAREERJET_AFFID = os.getenv("CAREERJET_AFFID", "")
 CAREERJET_LOCALE = os.getenv("CAREERJET_LOCALE", "en_GB")
+
+# ---------------------------------------------------------------------------
+# Semantic Matching — Sentence-BERT embedding model
+# ---------------------------------------------------------------------------
+# Model identifier passed to SentenceTransformer().
+# "all-MiniLM-L6-v2" is a fast, high-quality 384-dim model (~80 MB).
+# Swap for "all-mpnet-base-v2" (768-dim) if you need higher accuracy and
+# can afford the 2x inference latency.
+EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")

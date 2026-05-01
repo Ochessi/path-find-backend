@@ -64,6 +64,10 @@ redis==7.4.0
 requests==2.33.1
 rich==15.0.0
 s3transfer==0.16.1
+# Semantic matching — Sentence-BERT transformer models
+sentence-transformers>=3.0.0
+# Cache backend for profile vectors (uses Redis, same as Celery broker)
+django-redis>=5.4.0
 setuptools==82.0.1
 shellingham==1.5.4
 six==1.17.0
@@ -74,7 +78,9 @@ spacy-loggers==1.0.5
 sqlparse==0.5.5
 srsly==2.5.3
 thinc==8.3.13
+torch>=2.0.0
 tqdm==4.67.3
+transformers>=4.30.0
 typer==0.25.0
 typing-inspection==0.4.2
 typing_extensions==4.15.0

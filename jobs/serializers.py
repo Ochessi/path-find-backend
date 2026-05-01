@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from rest_framework.fields import SerializerMethodField
 from .models import JobListing, Document, Application
 
 
@@ -10,12 +11,22 @@ class JobListingSerializer(serializers.ModelSerializer):
     """
     Full serializer for a job listing.
     Includes human-readable choice labels as extra read-only fields.
+    The optional ``similarity_score`` field is populated by the curated feed
+    view and will be ``null`` when the listing is returned outside that context.
     """
 
     source_display = serializers.CharField(source="get_source_display", read_only=True)
     employment_type_display = serializers.CharField(
         source="get_employment_type_display", read_only=True
     )
+    # Populated at runtime by CuratedFeedView via a transient attribute on the
+    # model instance.  SerializerMethodField is used so that the field safely
+    # returns ``null`` when the attribute is absent (i.e. standard listings).
+    similarity_score = SerializerMethodField()
+
+    def get_similarity_score(self, obj) -> float | None:
+        """Return the pre-computed cosine similarity score, or None outside curated feed."""
+        return getattr(obj, "similarity_score", None)
 
     class Meta:
         model = JobListing
@@ -36,8 +47,10 @@ class JobListingSerializer(serializers.ModelSerializer):
             "posted_at",
             "created_at",
             "updated_at",
+            "similarity_score",
         )
         read_only_fields = ("id", "created_at", "updated_at")
+
 
 
 class JobListingMiniSerializer(serializers.ModelSerializer):

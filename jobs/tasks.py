@@ -124,3 +124,106 @@ def fetch_all_jobs() -> dict:
 
     logger.info("fetch_all_jobs complete: %s", totals)
     return totals
+
+
+# ---------------------------------------------------------------------------
+# Semantic Matching — Embedding tasks
+# ---------------------------------------------------------------------------
+
+@shared_task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=60,
+    name="jobs.compute_job_embedding",
+)
+def compute_job_embedding(self, job_listing_id: int) -> dict:
+    """
+    Compute and persist the Sentence-BERT embedding for a single JobListing.
+
+    Triggered automatically via a post-save Django signal on JobListing so
+    that newly ingested or updated listings are always backed by a fresh vector.
+
+    Can also be called manually:
+        from jobs.tasks import compute_job_embedding
+        compute_job_embedding.delay(job_listing_id=42)
+    """
+    from jobs.models import JobListing, JobEmbedding
+    from jobs.services.embedding_service import build_job_text, encode
+    from django.conf import settings
+
+    try:
+        job = JobListing.objects.get(pk=job_listing_id)
+    except JobListing.DoesNotExist:
+        logger.warning("compute_job_embedding: JobListing #%s not found.", job_listing_id)
+        return {"status": "not_found", "job_listing_id": job_listing_id}
+
+    model_name: str = getattr(settings, "EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
+
+    try:
+        text = build_job_text(job)
+        vector = encode(text).tolist()
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Embedding encoding failed for JobListing #%s: %s", job_listing_id, exc)
+        raise self.retry(exc=exc)
+
+    JobEmbedding.objects.update_or_create(
+        job_listing=job,
+        defaults={"vector": vector, "model_name": model_name},
+    )
+
+    logger.info("Embedding computed for JobListing #%s.", job_listing_id)
+    return {"status": "ok", "job_listing_id": job_listing_id, "dim": len(vector)}
+
+
+@shared_task(name="jobs.recompute_all_embeddings")
+def recompute_all_embeddings() -> dict:
+    """
+    Back-fill embeddings for all JobListings that satisfy either condition:
+      1. No embedding row exists yet (newly ingested listings).
+      2. The stored embedding was produced by a different model than the one
+         currently configured in ``settings.EMBEDDING_MODEL_NAME`` (model upgrade).
+
+    Useful after:
+      - First deployment of the semantic matching feature.
+      - Upgrading the embedding model: change EMBEDDING_MODEL_NAME in settings,
+        then this nightly task (or a manual .delay()) will re-queue all stale rows.
+
+    Run manually:
+        from jobs.tasks import recompute_all_embeddings
+        recompute_all_embeddings.delay()
+    """
+    from django.conf import settings
+    from jobs.models import JobListing, JobEmbedding
+
+    model_name: str = getattr(settings, "EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
+
+    # ── 1. Listings with no embedding row at all ───────────────────────────
+    embedded_ids = JobEmbedding.objects.values_list("job_listing_id", flat=True)
+    missing_ids = list(
+        JobListing.objects.exclude(pk__in=embedded_ids).values_list("id", flat=True)
+    )
+
+    # ── 2. Listings whose embedding was built with a different model ───────
+    stale_ids = list(
+        JobEmbedding.objects
+        .exclude(model_name=model_name)
+        .values_list("job_listing_id", flat=True)
+    )
+
+    all_ids = list(set(missing_ids) | set(stale_ids))
+
+    logger.info(
+        "recompute_all_embeddings: %d missing, %d stale (model mismatch) → %d total to queue.",
+        len(missing_ids), len(stale_ids), len(all_ids),
+    )
+
+    for jid in all_ids:
+        compute_job_embedding.delay(jid)
+
+    return {
+        "status": "queued",
+        "missing": len(missing_ids),
+        "stale": len(stale_ids),
+        "total": len(all_ids),
+        "model_name": model_name,
+    }

@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.contrib.postgres.fields import ArrayField
 from django.db import models
 
 
@@ -112,6 +113,50 @@ class JobListing(models.Model):
 
     def __str__(self):
         return f"{self.title} @ {self.company}"
+
+
+# ---------------------------------------------------------------------------
+# JobEmbedding — cached Sentence-BERT vector for a JobListing
+# ---------------------------------------------------------------------------
+
+class JobEmbedding(models.Model):
+    """
+    Stores the precomputed Sentence-BERT embedding for a JobListing.
+
+    Separating embeddings into their own table keeps the hot ``JobListing``
+    rows lean and lets us invalidate / recompute vectors independently of the
+    listing data.  The vector is persisted as a PostgreSQL float[] so it can
+    be retrieved in a single SELECT without deserialisation overhead.
+
+    Lifecycle:
+      - Created / updated by the ``compute_job_embedding`` Celery task which
+        is triggered via a post-save signal on ``JobListing``.
+      - Read by ``CuratedFeedView`` to rank listings by cosine similarity.
+    """
+
+    job_listing = models.OneToOneField(
+        JobListing,
+        on_delete=models.CASCADE,
+        related_name="embedding",
+    )
+    # Dense float vector — length depends on the model (384 for MiniLM-L6-v2).
+    vector = ArrayField(
+        models.FloatField(),
+        help_text="L2-normalised embedding vector produced by the SBERT model.",
+    )
+    model_name = models.CharField(
+        max_length=200,
+        default="all-MiniLM-L6-v2",
+        help_text="Identifier of the model used to produce this vector.",
+    )
+    computed_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "job embedding"
+        verbose_name_plural = "job embeddings"
+
+    def __str__(self):
+        return f"Embedding for: {self.job_listing}"
 
 
 # ---------------------------------------------------------------------------
