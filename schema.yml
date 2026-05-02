@@ -1,0 +1,1443 @@
+openapi: 3.0.3
+info:
+  title: Pathfind API
+  version: 1.0.0
+  description: API Documentation for Pathfind, an AI-driven job curation platform.
+paths:
+  /api/auth/google/:
+    post:
+      operationId: auth_google_create
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/auth/login/:
+    post:
+      operationId: auth_login_create
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/auth/me/:
+    get:
+      operationId: auth_me_retrieve
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/auth/register/:
+    post:
+      operationId: auth_register_create
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/auth/token/refresh/:
+    post:
+      operationId: auth_token_refresh_create
+      description: |-
+        Takes a refresh type JSON web token and returns an access type JSON web
+        token if the refresh token is valid.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: ''
+  /api/jobs/applications/:
+    get:
+      operationId: jobs_applications_list
+      description: |-
+        CRUD for the authenticated user's application pipeline.
+
+        Provides an additional PATCH action at /applications/{id}/status/
+        for lightweight Kanban status updates without sending the full payload.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      tags:
+      - jobs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Application'
+          description: ''
+    post:
+      operationId: jobs_applications_create
+      description: |-
+        CRUD for the authenticated user's application pipeline.
+
+        Provides an additional PATCH action at /applications/{id}/status/
+        for lightweight Kanban status updates without sending the full payload.
+      tags:
+      - jobs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ApplicationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ApplicationRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+          description: ''
+  /api/jobs/applications/{id}/:
+    get:
+      operationId: jobs_applications_retrieve
+      description: |-
+        CRUD for the authenticated user's application pipeline.
+
+        Provides an additional PATCH action at /applications/{id}/status/
+        for lightweight Kanban status updates without sending the full payload.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - jobs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+          description: ''
+    put:
+      operationId: jobs_applications_update
+      description: |-
+        CRUD for the authenticated user's application pipeline.
+
+        Provides an additional PATCH action at /applications/{id}/status/
+        for lightweight Kanban status updates without sending the full payload.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - jobs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ApplicationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ApplicationRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+          description: ''
+    patch:
+      operationId: jobs_applications_partial_update
+      description: |-
+        CRUD for the authenticated user's application pipeline.
+
+        Provides an additional PATCH action at /applications/{id}/status/
+        for lightweight Kanban status updates without sending the full payload.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - jobs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedApplicationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedApplicationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedApplicationRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+          description: ''
+    delete:
+      operationId: jobs_applications_destroy
+      description: |-
+        CRUD for the authenticated user's application pipeline.
+
+        Provides an additional PATCH action at /applications/{id}/status/
+        for lightweight Kanban status updates without sending the full payload.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - jobs
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/jobs/applications/{id}/status/:
+    patch:
+      operationId: jobs_applications_status_partial_update
+      description: PATCH /api/jobs/applications/{id}/status/ — move pipeline stage.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - jobs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedApplicationStatusUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedApplicationStatusUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedApplicationStatusUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationStatusUpdate'
+          description: ''
+  /api/jobs/applications/generate/:
+    post:
+      operationId: jobs_applications_generate_create
+      description: |-
+        POST /api/jobs/applications/generate/
+
+        Generates tailored resume bullet points and a cover letter for a specific job listing
+        using the authenticated user's profile and the Google AI Studio (Gemini) API.
+
+        Request body:
+            job_listing_id (int): The ID of the JobListing to tailor the application for.
+
+        Response 200:
+            {
+                "tailored_bullets": "...",
+                "cover_letter": "...",
+                "error": null
+            }
+      tags:
+      - jobs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/jobs/documents/:
+    get:
+      operationId: jobs_documents_list
+      description: |-
+        CRUD for documents belonging to the authenticated user.
+        Users can only see and manage their own documents.
+      tags:
+      - jobs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Document'
+          description: ''
+    post:
+      operationId: jobs_documents_create
+      description: |-
+        CRUD for documents belonging to the authenticated user.
+        Users can only see and manage their own documents.
+      tags:
+      - jobs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DocumentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DocumentRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+          description: ''
+  /api/jobs/documents/{id}/:
+    get:
+      operationId: jobs_documents_retrieve
+      description: |-
+        CRUD for documents belonging to the authenticated user.
+        Users can only see and manage their own documents.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - jobs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+          description: ''
+    put:
+      operationId: jobs_documents_update
+      description: |-
+        CRUD for documents belonging to the authenticated user.
+        Users can only see and manage their own documents.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - jobs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DocumentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DocumentRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+          description: ''
+    patch:
+      operationId: jobs_documents_partial_update
+      description: |-
+        CRUD for documents belonging to the authenticated user.
+        Users can only see and manage their own documents.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - jobs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDocumentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDocumentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDocumentRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+          description: ''
+    delete:
+      operationId: jobs_documents_destroy
+      description: |-
+        CRUD for documents belonging to the authenticated user.
+        Users can only see and manage their own documents.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - jobs
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/jobs/embedding-status/:
+    get:
+      operationId: jobs_embedding_status_retrieve
+      description: |-
+        GET /api/jobs/embedding-status/
+
+        Returns coverage statistics for the JobEmbedding cache so operators
+        can verify the semantic pipeline is healthy.  Staff-only endpoint.
+
+        Response 200:
+        {
+            "total_listings":   150,
+            "embedded":         142,   // vectors matching the active model
+            "missing":            8,   // no embedding row at all
+            "stale":              3,   // embedding exists but for a different model
+            "needs_update":      11,   // missing + stale
+            "coverage_pct":    94.7,
+            "model_name": "all-MiniLM-L6-v2"
+        }
+
+        POST /api/jobs/embedding-status/
+        Queues a Celery task to backfill missing + stale embeddings.
+        Response 202: { "queued": true, "missing": 8, "stale": 3, "total": 11 }
+      tags:
+      - jobs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: jobs_embedding_status_create
+      description: |-
+        GET /api/jobs/embedding-status/
+
+        Returns coverage statistics for the JobEmbedding cache so operators
+        can verify the semantic pipeline is healthy.  Staff-only endpoint.
+
+        Response 200:
+        {
+            "total_listings":   150,
+            "embedded":         142,   // vectors matching the active model
+            "missing":            8,   // no embedding row at all
+            "stale":              3,   // embedding exists but for a different model
+            "needs_update":      11,   // missing + stale
+            "coverage_pct":    94.7,
+            "model_name": "all-MiniLM-L6-v2"
+        }
+
+        POST /api/jobs/embedding-status/
+        Queues a Celery task to backfill missing + stale embeddings.
+        Response 202: { "queued": true, "missing": 8, "stale": 3, "total": 11 }
+      tags:
+      - jobs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/jobs/feed/:
+    get:
+      operationId: jobs_feed_retrieve
+      description: |-
+        GET /api/jobs/feed/
+
+        Returns job listings dynamically ranked by semantic similarity between
+        the authenticated user's profile and each job listing's Sentence-BERT
+        embedding.
+
+        Algorithm
+        ─────────
+        1. Build a natural-language text document from the user's Profile fields
+           (headline, skills, experience, preferences, etc.).
+        2. Encode the profile text into a dense L2-normalised vector using the
+           cached Sentence-BERT singleton.
+        3. Retrieve all pre-computed job embeddings from the DB in a single query.
+        4. Compute cosine similarity (= dot product of normalised vectors) between
+           the profile vector and every job vector — this is an in-memory NumPy
+           operation and is very fast (< 1 ms for thousands of jobs).
+        5. Sort listings by descending score and return a paginated response.
+
+        Query parameters
+        ────────────────
+        limit  (int, default 20) — Number of results per page.
+        offset (int, default 0)  — Pagination offset.
+        min_score (float, default 0.0) — Only return jobs with a similarity score
+                   at or above this threshold (0 = all, 0.5 = moderately similar).
+
+        Response 200
+        ────────────
+        {
+            "count":   <total matching jobs>,
+            "limit":   20,
+            "offset":  0,
+            "profile_complete": true,   // false → profile too sparse to score
+            "results": [
+                {
+                    "id": 1,
+                    "title": "Senior Python Engineer",
+                    ...                          // all JobListing fields
+                    "similarity_score": 0.847
+                },
+                ...
+            ]
+        }
+
+        Notes
+        ─────
+        - Jobs without a pre-computed embedding are excluded from the ranked feed.
+          They still appear in the standard /api/jobs/listings/ endpoint.
+        - If the user's profile is empty (no headline / skills / experience), the
+          endpoint falls back to returning listings ordered by creation date with
+          ``profile_complete: false`` to inform the frontend.
+        - Embedding computation is non-blocking: new jobs are encoded by a Celery
+          worker; they appear in the curated feed once the task completes (usually
+          within seconds).
+      tags:
+      - jobs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/jobs/fetch/:
+    post:
+      operationId: jobs_fetch_create
+      description: |-
+        POST /api/jobs/fetch/
+
+        Manually trigger the background task to fetch jobs from all external boards.
+      tags:
+      - jobs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/jobs/listings/:
+    get:
+      operationId: jobs_listings_list
+      description: |-
+        CRUD for job listings.
+        All authenticated users can read; only staff can create/update/delete
+        (regular users create listings implicitly through Applications).
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - jobs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/JobListing'
+          description: ''
+    post:
+      operationId: jobs_listings_create
+      description: |-
+        CRUD for job listings.
+        All authenticated users can read; only staff can create/update/delete
+        (regular users create listings implicitly through Applications).
+      tags:
+      - jobs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobListingRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/JobListingRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/JobListingRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobListing'
+          description: ''
+  /api/jobs/listings/{id}/:
+    get:
+      operationId: jobs_listings_retrieve
+      description: |-
+        CRUD for job listings.
+        All authenticated users can read; only staff can create/update/delete
+        (regular users create listings implicitly through Applications).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this job listing.
+        required: true
+      tags:
+      - jobs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobListing'
+          description: ''
+    put:
+      operationId: jobs_listings_update
+      description: |-
+        CRUD for job listings.
+        All authenticated users can read; only staff can create/update/delete
+        (regular users create listings implicitly through Applications).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this job listing.
+        required: true
+      tags:
+      - jobs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobListingRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/JobListingRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/JobListingRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobListing'
+          description: ''
+    patch:
+      operationId: jobs_listings_partial_update
+      description: |-
+        CRUD for job listings.
+        All authenticated users can read; only staff can create/update/delete
+        (regular users create listings implicitly through Applications).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this job listing.
+        required: true
+      tags:
+      - jobs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedJobListingRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedJobListingRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedJobListingRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobListing'
+          description: ''
+    delete:
+      operationId: jobs_listings_destroy
+      description: |-
+        CRUD for job listings.
+        All authenticated users can read; only staff can create/update/delete
+        (regular users create listings implicitly through Applications).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this job listing.
+        required: true
+      tags:
+      - jobs
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/jobs/resume/parse/:
+    post:
+      operationId: jobs_resume_parse_create
+      description: Upload a PDF or DOCX file to extract entities via NLP.
+      summary: Upload Resume for Parsing
+      tags:
+      - jobs
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResumeParseAccepted'
+          description: ''
+  /api/jobs/tasks/{task_id}/:
+    get:
+      operationId: jobs_tasks_retrieve
+      description: Poll this endpoint to get the status of a background task.
+      summary: Check Background Task Status
+      parameters:
+      - in: path
+        name: task_id
+        schema:
+          type: string
+        description: The ID of the Celery task
+        required: true
+      tags:
+      - jobs
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskStatusResponse'
+          description: ''
+components:
+  schemas:
+    Application:
+      type: object
+      description: |-
+        Full serializer for an Application record.
+
+        On reads: embeds a lightweight job listing snapshot and document metadata.
+        On writes: accepts FKs for job_listing, resume, and cover_letter.
+        The user field is always derived from the authenticated request context.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        user:
+          type: integer
+          readOnly: true
+        job_listing:
+          type: integer
+        job_listing_detail:
+          allOf:
+          - $ref: '#/components/schemas/JobListingMini'
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        resume:
+          type: integer
+          nullable: true
+          description: Tailored resume used for this application.
+        cover_letter:
+          type: integer
+          nullable: true
+          description: Cover letter used for this application.
+        notes:
+          type: string
+          description: Private notes about this application (interviews, contacts,
+            etc.).
+        applied_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the user actually submitted the application.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - job_listing
+      - job_listing_detail
+      - status_display
+      - updated_at
+      - user
+    ApplicationRequest:
+      type: object
+      description: |-
+        Full serializer for an Application record.
+
+        On reads: embeds a lightweight job listing snapshot and document metadata.
+        On writes: accepts FKs for job_listing, resume, and cover_letter.
+        The user field is always derived from the authenticated request context.
+      properties:
+        job_listing:
+          type: integer
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        resume:
+          type: integer
+          nullable: true
+          description: Tailored resume used for this application.
+        cover_letter:
+          type: integer
+          nullable: true
+          description: Cover letter used for this application.
+        notes:
+          type: string
+          description: Private notes about this application (interviews, contacts,
+            etc.).
+        applied_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the user actually submitted the application.
+      required:
+      - job_listing
+    ApplicationStatusUpdate:
+      type: object
+      description: |-
+        Minimal serializer for PATCH requests that only update the pipeline status
+        (e.g. moving a card on the Kanban board).
+      properties:
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        applied_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the user actually submitted the application.
+        notes:
+          type: string
+          description: Private notes about this application (interviews, contacts,
+            etc.).
+    BlankEnum:
+      enum:
+      - ''
+    DocTypeEnum:
+      enum:
+      - resume
+      - cover_letter
+      - portfolio
+      - other
+      type: string
+      description: |-
+        * `resume` - Resume
+        * `cover_letter` - Cover Letter
+        * `portfolio` - Portfolio
+        * `other` - Other
+    Document:
+      type: object
+      description: |-
+        Serializer for Document metadata.
+        The actual file upload to S3 is handled separately via a presigned-URL
+        flow; this serializer deals only with the metadata record.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        user:
+          type: integer
+          readOnly: true
+        file_url:
+          type: string
+          format: uri
+          description: Full URL to the file in the storage bucket.
+          maxLength: 2000
+        file_name:
+          type: string
+          description: Original filename as uploaded by the user or generated by AI.
+          maxLength: 500
+        storage_key:
+          type: string
+          description: Storage backend object key (e.g. S3 key). Used for deletion
+            and refresh.
+          maxLength: 1000
+        doc_type:
+          $ref: '#/components/schemas/DocTypeEnum'
+        doc_type_display:
+          type: string
+          readOnly: true
+        is_ai_generated:
+          type: boolean
+          description: True if this document was generated or tailored by Pathfind
+            AI.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - doc_type_display
+      - file_name
+      - file_url
+      - id
+      - user
+    DocumentRequest:
+      type: object
+      description: |-
+        Serializer for Document metadata.
+        The actual file upload to S3 is handled separately via a presigned-URL
+        flow; this serializer deals only with the metadata record.
+      properties:
+        file_url:
+          type: string
+          format: uri
+          minLength: 1
+          description: Full URL to the file in the storage bucket.
+          maxLength: 2000
+        file_name:
+          type: string
+          minLength: 1
+          description: Original filename as uploaded by the user or generated by AI.
+          maxLength: 500
+        storage_key:
+          type: string
+          description: Storage backend object key (e.g. S3 key). Used for deletion
+            and refresh.
+          maxLength: 1000
+        doc_type:
+          $ref: '#/components/schemas/DocTypeEnum'
+        is_ai_generated:
+          type: boolean
+          description: True if this document was generated or tailored by Pathfind
+            AI.
+      required:
+      - file_name
+      - file_url
+    EmploymentTypeEnum:
+      enum:
+      - full_time
+      - part_time
+      - contract
+      - internship
+      - freelance
+      type: string
+      description: |-
+        * `full_time` - Full-time
+        * `part_time` - Part-time
+        * `contract` - Contract
+        * `internship` - Internship
+        * `freelance` - Freelance
+    JobListing:
+      type: object
+      description: |-
+        Full serializer for a job listing.
+        Includes human-readable choice labels as extra read-only fields.
+        The optional ``similarity_score`` field is populated by the curated feed
+        view and will be ``null`` when the listing is returned outside that context.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          maxLength: 255
+        company:
+          type: string
+          maxLength: 255
+        location:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        source:
+          $ref: '#/components/schemas/SourceEnum'
+        source_display:
+          type: string
+          readOnly: true
+        source_url:
+          type: string
+          format: uri
+          description: Original URL of the job posting, if available.
+          maxLength: 2000
+        employment_type:
+          oneOf:
+          - $ref: '#/components/schemas/EmploymentTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        employment_type_display:
+          type: string
+          readOnly: true
+        is_remote:
+          type: boolean
+        salary_min:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+          description: Annual salary lower bound (currency assumed from user preference).
+        salary_max:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+          description: Annual salary upper bound.
+        posted_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Original posting date from the source, if available.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        similarity_score:
+          type: number
+          format: double
+          nullable: true
+          readOnly: true
+      required:
+      - company
+      - created_at
+      - employment_type_display
+      - id
+      - similarity_score
+      - source_display
+      - title
+      - updated_at
+    JobListingMini:
+      type: object
+      description: Lightweight serializer for embedding in Application responses.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          maxLength: 255
+        company:
+          type: string
+          maxLength: 255
+        location:
+          type: string
+          maxLength: 255
+        employment_type:
+          oneOf:
+          - $ref: '#/components/schemas/EmploymentTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        is_remote:
+          type: boolean
+      required:
+      - company
+      - id
+      - title
+    JobListingMiniRequest:
+      type: object
+      description: Lightweight serializer for embedding in Application responses.
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        company:
+          type: string
+          minLength: 1
+          maxLength: 255
+        location:
+          type: string
+          maxLength: 255
+        employment_type:
+          oneOf:
+          - $ref: '#/components/schemas/EmploymentTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        is_remote:
+          type: boolean
+      required:
+      - company
+      - title
+    JobListingRequest:
+      type: object
+      description: |-
+        Full serializer for a job listing.
+        Includes human-readable choice labels as extra read-only fields.
+        The optional ``similarity_score`` field is populated by the curated feed
+        view and will be ``null`` when the listing is returned outside that context.
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        company:
+          type: string
+          minLength: 1
+          maxLength: 255
+        location:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        source:
+          $ref: '#/components/schemas/SourceEnum'
+        source_url:
+          type: string
+          format: uri
+          description: Original URL of the job posting, if available.
+          maxLength: 2000
+        employment_type:
+          oneOf:
+          - $ref: '#/components/schemas/EmploymentTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        is_remote:
+          type: boolean
+        salary_min:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+          description: Annual salary lower bound (currency assumed from user preference).
+        salary_max:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+          description: Annual salary upper bound.
+        posted_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Original posting date from the source, if available.
+      required:
+      - company
+      - title
+    PatchedApplicationRequest:
+      type: object
+      description: |-
+        Full serializer for an Application record.
+
+        On reads: embeds a lightweight job listing snapshot and document metadata.
+        On writes: accepts FKs for job_listing, resume, and cover_letter.
+        The user field is always derived from the authenticated request context.
+      properties:
+        job_listing:
+          type: integer
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        resume:
+          type: integer
+          nullable: true
+          description: Tailored resume used for this application.
+        cover_letter:
+          type: integer
+          nullable: true
+          description: Cover letter used for this application.
+        notes:
+          type: string
+          description: Private notes about this application (interviews, contacts,
+            etc.).
+        applied_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the user actually submitted the application.
+    PatchedApplicationStatusUpdateRequest:
+      type: object
+      description: |-
+        Minimal serializer for PATCH requests that only update the pipeline status
+        (e.g. moving a card on the Kanban board).
+      properties:
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        applied_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the user actually submitted the application.
+        notes:
+          type: string
+          description: Private notes about this application (interviews, contacts,
+            etc.).
+    PatchedDocumentRequest:
+      type: object
+      description: |-
+        Serializer for Document metadata.
+        The actual file upload to S3 is handled separately via a presigned-URL
+        flow; this serializer deals only with the metadata record.
+      properties:
+        file_url:
+          type: string
+          format: uri
+          minLength: 1
+          description: Full URL to the file in the storage bucket.
+          maxLength: 2000
+        file_name:
+          type: string
+          minLength: 1
+          description: Original filename as uploaded by the user or generated by AI.
+          maxLength: 500
+        storage_key:
+          type: string
+          description: Storage backend object key (e.g. S3 key). Used for deletion
+            and refresh.
+          maxLength: 1000
+        doc_type:
+          $ref: '#/components/schemas/DocTypeEnum'
+        is_ai_generated:
+          type: boolean
+          description: True if this document was generated or tailored by Pathfind
+            AI.
+    PatchedJobListingRequest:
+      type: object
+      description: |-
+        Full serializer for a job listing.
+        Includes human-readable choice labels as extra read-only fields.
+        The optional ``similarity_score`` field is populated by the curated feed
+        view and will be ``null`` when the listing is returned outside that context.
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        company:
+          type: string
+          minLength: 1
+          maxLength: 255
+        location:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        source:
+          $ref: '#/components/schemas/SourceEnum'
+        source_url:
+          type: string
+          format: uri
+          description: Original URL of the job posting, if available.
+          maxLength: 2000
+        employment_type:
+          oneOf:
+          - $ref: '#/components/schemas/EmploymentTypeEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        is_remote:
+          type: boolean
+        salary_min:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+          description: Annual salary lower bound (currency assumed from user preference).
+        salary_max:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+          description: Annual salary upper bound.
+        posted_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Original posting date from the source, if available.
+    ResumeParseAccepted:
+      type: object
+      properties:
+        task_id:
+          type: string
+        status:
+          type: string
+      required:
+      - status
+      - task_id
+    SourceEnum:
+      enum:
+      - manual
+      - adzuna
+      - jooble
+      - careerjet
+      - linkedin
+      - indeed
+      - glassdoor
+      - lever
+      - greenhouse
+      - other
+      type: string
+      description: |-
+        * `manual` - Manual
+        * `adzuna` - Adzuna
+        * `jooble` - Jooble
+        * `careerjet` - Careerjet
+        * `linkedin` - LinkedIn
+        * `indeed` - Indeed
+        * `glassdoor` - Glassdoor
+        * `lever` - Lever
+        * `greenhouse` - Greenhouse
+        * `other` - Other
+    StatusEnum:
+      enum:
+      - saved
+      - applied
+      - phone_screen
+      - interviewing
+      - offer
+      - rejected
+      - withdrawn
+      type: string
+      description: |-
+        * `saved` - Saved
+        * `applied` - Applied
+        * `phone_screen` - Phone Screen
+        * `interviewing` - Interviewing
+        * `offer` - Offer
+        * `rejected` - Rejected
+        * `withdrawn` - Withdrawn
+    TaskStatusResponse:
+      type: object
+      properties:
+        task_id:
+          type: string
+        status:
+          type: string
+        result: {}
+        error:
+          type: string
+      required:
+      - status
+      - task_id
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+      required:
+      - access
+      - refresh
+    TokenRefreshRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+          minLength: 1
+      required:
+      - refresh
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

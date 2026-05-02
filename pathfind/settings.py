@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "django.contrib.postgres",   # ArrayField for embedding vectors
     # Third-party
     "rest_framework",
+    "drf_spectacular",
     "rest_framework_simplejwt",
     "corsheaders",
     "storages",
@@ -138,6 +139,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Django REST Framework
 # ---------------------------------------------------------------------------
 REST_FRAMEWORK = {
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
@@ -147,6 +149,17 @@ REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": (
         "rest_framework.renderers.JSONRenderer",
     ),
+}
+
+# ---------------------------------------------------------------------------
+# DRF Spectacular (Swagger/OpenAPI)
+# ---------------------------------------------------------------------------
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Pathfind API",
+    "DESCRIPTION": "API Documentation for Pathfind, an AI-driven job curation platform.",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True, # Useful for separate request/response schemas
 }
 
 # ---------------------------------------------------------------------------

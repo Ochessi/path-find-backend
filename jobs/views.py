@@ -12,6 +12,8 @@ from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework import serializers
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse, inline_serializer
 
 from .models import JobListing, Document, Application, JobEmbedding
 from .parsers import ResumeParser
@@ -140,6 +142,30 @@ class ResumeParseView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
 
+    @extend_schema(
+        summary="Upload Resume for Parsing",
+        description="Upload a PDF or DOCX file to extract entities via NLP.",
+        request={
+            'multipart/form-data': {
+                'type': 'object',
+                'properties': {
+                    'file': {
+                        'type': 'string',
+                        'format': 'binary'
+                    }
+                }
+            }
+        },
+        responses={
+            202: inline_serializer(
+                name='ResumeParseAccepted',
+                fields={
+                    'task_id': serializers.CharField(),
+                    'status': serializers.CharField()
+                }
+            )
+        }
+    )
     def post(self, request):
         uploaded_file = request.FILES.get("file")
         if not uploaded_file:
@@ -326,6 +352,27 @@ class CuratedFeedView(APIView):
     # a separate post_save signal (see jobs/signals.py).
     _PROFILE_VECTOR_TTL = 3600  # 1 hour
 
+    @extend_schema(
+        summary="Get Curated Job Feed",
+        description="Returns job listings dynamically ranked by semantic similarity between the user's profile and each job listing's embedding.",
+        parameters=[
+            OpenApiParameter(name="limit", type=int, location=OpenApiParameter.QUERY, description="Number of results per page", default=20),
+            OpenApiParameter(name="offset", type=int, location=OpenApiParameter.QUERY, description="Pagination offset", default=0),
+            OpenApiParameter(name="min_score", type=float, location=OpenApiParameter.QUERY, description="Minimum similarity score threshold", default=0.0),
+        ],
+        responses={
+            200: inline_serializer(
+                name='CuratedFeedResponse',
+                fields={
+                    'count': serializers.IntegerField(),
+                    'limit': serializers.IntegerField(),
+                    'offset': serializers.IntegerField(),
+                    'profile_complete': serializers.BooleanField(),
+                    'results': JobListingSerializer(many=True),
+                }
+            )
+        }
+    )
     def get(self, request):
         from jobs.services.embedding_service import (
             build_profile_text,
@@ -509,6 +556,24 @@ class EmbeddingStatusView(APIView):
 
     permission_classes = [permissions.IsAdminUser]
 
+    @extend_schema(
+        summary="Get Embedding Pipeline Status",
+        description="Returns coverage statistics for the JobEmbedding cache.",
+        responses={
+            200: inline_serializer(
+                name='EmbeddingStatusResponse',
+                fields={
+                    'total_listings': serializers.IntegerField(),
+                    'embedded': serializers.IntegerField(),
+                    'missing': serializers.IntegerField(),
+                    'stale': serializers.IntegerField(),
+                    'needs_update': serializers.IntegerField(),
+                    'coverage_pct': serializers.FloatField(),
+                    'model_name': serializers.CharField(),
+                }
+            )
+        }
+    )
     def get(self, request):
         model_name: str = getattr(settings, "EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
 
@@ -539,6 +604,32 @@ class EmbeddingStatusView(APIView):
             }
         )
 
+    @extend_schema(
+        summary="Queue Embedding Backfill",
+        description="Queues a Celery task to backfill missing + stale embeddings.",
+        request=None,
+        responses={
+            200: inline_serializer(
+                name='EmbeddingBackfillNoAction',
+                fields={
+                    'queued': serializers.BooleanField(),
+                    'missing': serializers.IntegerField(),
+                    'stale': serializers.IntegerField(),
+                    'total': serializers.IntegerField(),
+                    'detail': serializers.CharField()
+                }
+            ),
+            202: inline_serializer(
+                name='EmbeddingBackfillQueued',
+                fields={
+                    'queued': serializers.BooleanField(),
+                    'missing': serializers.IntegerField(),
+                    'stale': serializers.IntegerField(),
+                    'total': serializers.IntegerField()
+                }
+            )
+        }
+    )
     def post(self, request):
         from jobs.tasks import recompute_all_embeddings
 
@@ -597,6 +688,20 @@ class ApplicationAIGenerateView(APIView):
     """
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        summary="Generate Tailored Application Materials",
+        description="Generates tailored resume bullet points and a cover letter for a specific job listing using AI.",
+        request=inline_serializer(
+            name='ApplicationAIGenerateRequest',
+            fields={'job_listing_id': serializers.IntegerField()}
+        ),
+        responses={
+            202: inline_serializer(
+                name='ApplicationAIGenerateAccepted',
+                fields={'task_id': serializers.CharField(), 'status': serializers.CharField()}
+            )
+        }
+    )
     def post(self, request):
         job_listing_id = request.data.get("job_listing_id")
         if not job_listing_id:
@@ -636,6 +741,29 @@ class TaskStatusView(APIView):
     """
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        summary="Check Background Task Status",
+        description="Poll this endpoint to get the status of a background task.",
+        parameters=[
+            OpenApiParameter(
+                name="task_id", 
+                type=str, 
+                location=OpenApiParameter.PATH, 
+                description="The ID of the Celery task"
+            )
+        ],
+        responses={
+            200: inline_serializer(
+                name='TaskStatusResponse',
+                fields={
+                    'task_id': serializers.CharField(),
+                    'status': serializers.CharField(),
+                    'result': serializers.JSONField(required=False),
+                    'error': serializers.CharField(required=False),
+                }
+            )
+        }
+    )
     def get(self, request, task_id):
         task_result = AsyncResult(task_id)
         response_data = {
@@ -663,6 +791,17 @@ class FetchJobsView(APIView):
     """
     permission_classes = [permissions.IsAdminUser]
 
+    @extend_schema(
+        summary="Trigger External Job Fetch",
+        description="Manually trigger the background task to fetch jobs from all external boards.",
+        request=None,
+        responses={
+            202: inline_serializer(
+                name='FetchJobsAccepted',
+                fields={'task_id': serializers.CharField(), 'status': serializers.CharField()}
+            )
+        }
+    )
     def post(self, request):
         from jobs.tasks import fetch_all_jobs
         task = fetch_all_jobs.delay()

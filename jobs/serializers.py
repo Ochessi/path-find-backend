@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from rest_framework.fields import SerializerMethodField
+from drf_spectacular.utils import extend_schema_field
 from .models import JobListing, Document, Application
 
 
@@ -24,6 +25,7 @@ class JobListingSerializer(serializers.ModelSerializer):
     # returns ``null`` when the attribute is absent (i.e. standard listings).
     similarity_score = SerializerMethodField()
 
+    @extend_schema_field(serializers.FloatField(allow_null=True))
     def get_similarity_score(self, obj) -> float | None:
         """Return the pre-computed cosine similarity score, or None outside curated feed."""
         return getattr(obj, "similarity_score", None)
