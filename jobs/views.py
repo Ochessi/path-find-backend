@@ -576,3 +576,59 @@ class EmbeddingStatusView(APIView):
             {"queued": True, "missing": missing, "stale": stale, "total": total},
             status=status.HTTP_202_ACCEPTED,
         )
+
+# ---------------------------------------------------------------------------
+# AI Generation - Tailored Application Content
+# ---------------------------------------------------------------------------
+
+from django.shortcuts import get_object_or_404
+from .services.ai_generator import generate_application_content
+
+class ApplicationAIGenerateView(APIView):
+    """
+    POST /api/jobs/applications/generate/
+    
+    Generates tailored resume bullet points and a cover letter for a specific job listing
+    using the authenticated user's profile and the Google AI Studio (Gemini) API.
+    
+    Request body:
+        job_listing_id (int): The ID of the JobListing to tailor the application for.
+        
+    Response 200:
+        {
+            "tailored_bullets": "...",
+            "cover_letter": "...",
+            "error": null
+        }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        job_listing_id = request.data.get("job_listing_id")
+        if not job_listing_id:
+            return Response(
+                {"detail": "job_listing_id is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        job_listing = get_object_or_404(JobListing, pk=job_listing_id)
+        
+        try:
+            profile = request.user.profile
+        except Exception:
+            return Response(
+                {"detail": "User profile not found. Please complete your profile first."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Generate content using Gemini
+        generated_content = generate_application_content(profile, job_listing)
+        
+        if "error" in generated_content:
+            return Response(
+                {"detail": "Failed to generate application content.", "error": generated_content["error"]},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        return Response(generated_content, status=status.HTTP_200_OK)
+

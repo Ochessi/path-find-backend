@@ -335,3 +335,8 @@ CAREERJET_LOCALE = os.getenv("CAREERJET_LOCALE", "en_GB")
 # Swap for "all-mpnet-base-v2" (768-dim) if you need higher accuracy and
 # can afford the 2x inference latency.
 EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
+
+# ---------------------------------------------------------------------------
+# Google Generative AI (Gemini)
+# ---------------------------------------------------------------------------
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")

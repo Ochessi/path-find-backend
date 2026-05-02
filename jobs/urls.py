@@ -8,6 +8,7 @@ from .views import (
     ResumeParseView,
     CuratedFeedView,
     EmbeddingStatusView,
+    ApplicationAIGenerateView,
 )
 
 router = DefaultRouter()
@@ -23,4 +24,6 @@ urlpatterns = [
     path("feed/", CuratedFeedView.as_view(), name="curated-feed"),
     # Admin: embedding pipeline health-check & manual backfill trigger
     path("embedding-status/", EmbeddingStatusView.as_view(), name="embedding-status"),
+    # AI Content Generation for applications
+    path("applications/generate/", ApplicationAIGenerateView.as_view(), name="application-generate"),
 ]
