@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import base64
 import logging
 
 import numpy as np
+from celery.result import AsyncResult
 from django.conf import settings
 from django.core.cache import cache
 from rest_framework import viewsets, permissions, filters, status
@@ -165,23 +167,15 @@ class ResumeParseView(APIView):
             )
 
         file_bytes = uploaded_file.read()
-        parser = ResumeParser()
+        file_base64 = base64.b64encode(file_bytes).decode("utf-8")
 
-        try:
-            extracted = parser.parse(file_bytes, content_type)
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("Resume parsing failed: %s", exc)
-            return Response(
-                {"detail": "Resume parsing failed. Please try again."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        from jobs.tasks import parse_resume_task
 
-        # ── Merge extracted data into the user's Profile ──────────────────
-        profile_updated = self._update_profile(request.user, extracted)
+        task = parse_resume_task.delay(request.user.id, file_base64, content_type)
 
         return Response(
-            {"extracted": extracted, "profile_updated": profile_updated},
-            status=status.HTTP_200_OK,
+            {"task_id": task.id, "status": "processing"},
+            status=status.HTTP_202_ACCEPTED,
         )
 
     @staticmethod
@@ -621,14 +615,60 @@ class ApplicationAIGenerateView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Generate content using Gemini
-        generated_content = generate_application_content(profile, job_listing)
-        
-        if "error" in generated_content:
-            return Response(
-                {"detail": "Failed to generate application content.", "error": generated_content["error"]},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        from jobs.tasks import generate_application_content_task
+        task = generate_application_content_task.delay(request.user.id, job_listing.id)
 
-        return Response(generated_content, status=status.HTTP_200_OK)
+        return Response(
+            {"task_id": task.id, "status": "processing"},
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Background Task Status Check
+# ---------------------------------------------------------------------------
+
+class TaskStatusView(APIView):
+    """
+    GET /api/jobs/tasks/<task_id>/
+
+    Check the status of an asynchronous background task.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, task_id):
+        task_result = AsyncResult(task_id)
+        response_data = {
+            "task_id": task_id,
+            "status": task_result.status,
+        }
+
+        if task_result.state == "SUCCESS":
+            response_data["result"] = task_result.result
+        elif task_result.state == "FAILURE":
+            response_data["error"] = str(task_result.result)
+
+        return Response(response_data)
+
+
+# ---------------------------------------------------------------------------
+# Manual Job Fetch Trigger
+# ---------------------------------------------------------------------------
+
+class FetchJobsView(APIView):
+    """
+    POST /api/jobs/fetch/
+
+    Manually trigger the background task to fetch jobs from all external boards.
+    """
+    permission_classes = [permissions.IsAdminUser]
+
+    def post(self, request):
+        from jobs.tasks import fetch_all_jobs
+        task = fetch_all_jobs.delay()
+        return Response(
+            {"task_id": task.id, "status": "processing"},
+            status=status.HTTP_202_ACCEPTED,
+        )
+
 

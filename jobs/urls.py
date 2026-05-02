@@ -9,6 +9,8 @@ from .views import (
     CuratedFeedView,
     EmbeddingStatusView,
     ApplicationAIGenerateView,
+    TaskStatusView,
+    FetchJobsView,
 )
 
 router = DefaultRouter()
@@ -26,4 +28,8 @@ urlpatterns = [
     path("embedding-status/", EmbeddingStatusView.as_view(), name="embedding-status"),
     # AI Content Generation for applications
     path("applications/generate/", ApplicationAIGenerateView.as_view(), name="application-generate"),
+    # Task Status checking
+    path("tasks/<str:task_id>/", TaskStatusView.as_view(), name="task-status"),
+    # Manual Job Fetching
+    path("fetch/", FetchJobsView.as_view(), name="fetch-jobs"),
 ]

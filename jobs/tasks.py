@@ -227,3 +227,47 @@ def recompute_all_embeddings() -> dict:
         "total": len(all_ids),
         "model_name": model_name,
     }
+
+@shared_task(bind=True)
+def parse_resume_task(self, user_id: int, file_base64: str, content_type: str) -> dict:
+    import base64
+    from django.contrib.auth import get_user_model
+    from jobs.parsers import ResumeParser
+    from jobs.views import ResumeParseView
+
+    User = get_user_model()
+    try:
+        user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        return {"error": "User not found."}
+
+    file_bytes = base64.b64decode(file_base64)
+    parser = ResumeParser()
+    
+    try:
+        extracted = parser.parse(file_bytes, content_type)
+    except Exception as exc:
+        logger.exception("Resume parsing failed in task: %s", exc)
+        return {"error": "Resume parsing failed. Please try again."}
+
+    # Merge extracted data into the user's Profile
+    profile_updated = ResumeParseView._update_profile(user, extracted)
+
+    return {"extracted": extracted, "profile_updated": profile_updated}
+
+@shared_task(bind=True)
+def generate_application_content_task(self, user_id: int, job_listing_id: int) -> dict:
+    from django.contrib.auth import get_user_model
+    from jobs.models import JobListing
+    from jobs.services.ai_generator import generate_application_content
+    
+    User = get_user_model()
+    try:
+        user = User.objects.get(pk=user_id)
+        job_listing = JobListing.objects.get(pk=job_listing_id)
+        profile = user.profile
+    except Exception as exc:
+        return {"error": str(exc)}
+        
+    generated_content = generate_application_content(profile, job_listing)
+    return generated_content
