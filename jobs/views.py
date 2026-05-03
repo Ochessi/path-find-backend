@@ -716,7 +716,16 @@ class ApplicationAIGenerateView(APIView):
         description="Generates tailored resume bullet points and a cover letter for a specific job listing using AI.",
         request=inline_serializer(
             name='ApplicationAIGenerateRequest',
-            fields={'job_listing_id': serializers.IntegerField()}
+            fields={
+                'application_id': serializers.IntegerField(
+                    required=False,
+                    help_text='ID of the Application record (preferred). The job listing is derived from it.'
+                ),
+                'job_listing_id': serializers.IntegerField(
+                    required=False,
+                    help_text='ID of a JobListing directly (fallback for admin/API use).'
+                ),
+            }
         ),
         responses={
             202: inline_serializer(
@@ -726,15 +735,25 @@ class ApplicationAIGenerateView(APIView):
         }
     )
     def post(self, request):
+        # The frontend sends application_id (preferred). Fall back to job_listing_id
+        # for direct API calls / admin use.
+        application_id = request.data.get("application_id")
         job_listing_id = request.data.get("job_listing_id")
-        if not job_listing_id:
+
+        if application_id:
+            # Derive the job listing from the application; also validates ownership.
+            application = get_object_or_404(
+                Application, pk=application_id, user=request.user
+            )
+            job_listing = application.job_listing
+        elif job_listing_id:
+            job_listing = get_object_or_404(JobListing, pk=job_listing_id)
+        else:
             return Response(
-                {"detail": "job_listing_id is required."},
+                {"detail": "Either application_id or job_listing_id is required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        job_listing = get_object_or_404(JobListing, pk=job_listing_id)
-        
         try:
             profile = request.user.profile
         except Exception:

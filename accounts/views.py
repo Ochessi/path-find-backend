@@ -15,7 +15,7 @@ from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 
 from .models import Profile
-from .serializers import RegisterSerializer, UserSerializer
+from .serializers import RegisterSerializer, UserSerializer, ProfileSerializer
 
 User = get_user_model()
 
@@ -198,7 +198,7 @@ class GoogleAuthView(APIView):
 
 
 # ---------------------------------------------------------------------------
-# GET /api/auth/me/
+# GET / PATCH /api/auth/me/
 # ---------------------------------------------------------------------------
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
@@ -209,3 +209,116 @@ class MeView(APIView):
     )
     def get(self, request):
         return Response(UserSerializer(request.user).data)
+
+    @extend_schema(
+        summary="Update Current User",
+        description=(
+            "PATCH-update the authenticated user and/or their profile. "
+            "Accepts a flat payload; profile-level fields (summary/bio, "
+            "linkedin, website, location, preferences, onboarding_complete) "
+            "are automatically routed to the Profile model."
+        ),
+        request=inline_serializer(
+            name='PatchMeRequest',
+            fields={
+                'full_name':          serializers.CharField(required=False),
+                'summary':            serializers.CharField(required=False),
+                'bio':                serializers.CharField(required=False),
+                'headline':           serializers.CharField(required=False),
+                'location':           serializers.CharField(required=False),
+                'phone':              serializers.CharField(required=False),
+                'linkedin':           serializers.CharField(required=False),
+                'linkedin_url':       serializers.CharField(required=False),
+                'website':            serializers.CharField(required=False),
+                'portfolio_url':      serializers.CharField(required=False),
+                'skills':             serializers.JSONField(required=False),
+                'experience':         serializers.JSONField(required=False),
+                'education':          serializers.JSONField(required=False),
+                'preferences':        serializers.JSONField(required=False),
+                'job_preferences':    serializers.JSONField(required=False),
+                'onboarding_complete': serializers.BooleanField(required=False),
+            }
+        ),
+        responses={200: UserSerializer}
+    )
+    def patch(self, request):
+        data = request.data
+        user = request.user
+
+        # ── User-level fields ─────────────────────────────────────────────
+        user_changed = False
+        if 'full_name' in data:
+            user.full_name = data['full_name']
+            user_changed = True
+        if user_changed:
+            user.save(update_fields=['full_name'])
+
+        # ── Profile-level fields ──────────────────────────────────────────
+        try:
+            profile = user.profile
+        except Exception:
+            profile = Profile.objects.create(user=user)
+
+        profile_fields_changed = []
+
+        # Alias: summary → bio
+        bio_val = data.get('summary') or data.get('bio')
+        if bio_val is not None:
+            profile.bio = bio_val
+            profile_fields_changed.append('bio')
+
+        if 'headline' in data:
+            profile.headline = data['headline']
+            profile_fields_changed.append('headline')
+
+        if 'location' in data:
+            profile.location = data['location']
+            profile_fields_changed.append('location')
+
+        if 'phone' in data:
+            profile.phone = data['phone']
+            profile_fields_changed.append('phone')
+
+        # Alias: linkedin → linkedin_url
+        linkedin_val = data.get('linkedin') or data.get('linkedin_url')
+        if linkedin_val is not None:
+            profile.linkedin_url = linkedin_val
+            profile_fields_changed.append('linkedin_url')
+
+        # Alias: website → portfolio_url
+        website_val = data.get('website') or data.get('portfolio_url')
+        if website_val is not None:
+            profile.portfolio_url = website_val
+            profile_fields_changed.append('portfolio_url')
+
+        if 'skills' in data:
+            profile.skills = data['skills']
+            profile_fields_changed.append('skills')
+
+        if 'experience' in data:
+            profile.experience = data['experience']
+            profile_fields_changed.append('experience')
+
+        if 'education' in data:
+            profile.education = data['education']
+            profile_fields_changed.append('education')
+
+        # Alias: preferences → job_preferences
+        prefs_val = data.get('preferences') or data.get('job_preferences')
+        if prefs_val is not None:
+            profile.job_preferences = prefs_val
+            profile_fields_changed.append('job_preferences')
+
+        # onboarding_complete flag — stored inside job_preferences JSON
+        if 'onboarding_complete' in data:
+            prefs = profile.job_preferences or {}
+            prefs['onboarding_complete'] = bool(data['onboarding_complete'])
+            profile.job_preferences = prefs
+            if 'job_preferences' not in profile_fields_changed:
+                profile_fields_changed.append('job_preferences')
+
+        if profile_fields_changed:
+            profile_fields_changed.append('updated_at')
+            profile.save(update_fields=profile_fields_changed)
+
+        return Response(UserSerializer(user).data)
