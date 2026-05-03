@@ -91,17 +91,17 @@ WSGI_APPLICATION = "pathfind.wsgi.application"
 # ---------------------------------------------------------------------------
 # Database
 # Reads DATABASE_URL from the environment. Works for both local PostgreSQL
-# and NeonDB (just swap the URL — no code changes needed).
-#
-#   Dev:  postgres://postgres:password@localhost/pathfind_dev
-#   Prod: postgresql://user:pass@ep-xxx.neon.tech/pathfind?sslmode=require
+# and NeonDB.
 # ---------------------------------------------------------------------------
+db_config = dj_database_url.config(
+    env="DATABASE_URL",
+    # Best practice: 0 when using an external pooler (like Neon's PgBouncer)
+    conn_max_age=0,
+    conn_health_checks=True,
+)
+
 DATABASES = {
-    "default": dj_database_url.config(
-        env="DATABASE_URL",
-        conn_max_age=600,
-        conn_health_checks=True,
-    )
+    "default": db_config
 }
 
 # ---------------------------------------------------------------------------
