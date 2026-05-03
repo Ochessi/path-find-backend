@@ -8,6 +8,8 @@ from rest_framework.views import APIView
 
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView  # re-exported for URL
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers
 
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
@@ -33,6 +35,20 @@ def _jwt_pair(user):
 class RegisterView(APIView):
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        summary="Register User",
+        request=RegisterSerializer,
+        responses={
+            201: inline_serializer(
+                name='RegisterResponse',
+                fields={
+                    'user': UserSerializer(),
+                    'access': serializers.CharField(),
+                    'refresh': serializers.CharField(),
+                }
+            )
+        }
+    )
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -53,6 +69,27 @@ class RegisterView(APIView):
 class LoginView(APIView):
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        summary="Login User",
+        request=inline_serializer(
+            name='LoginRequest',
+            fields={
+                'email': serializers.EmailField(),
+                'password': serializers.CharField(),
+            }
+        ),
+        responses={
+            200: inline_serializer(
+                name='LoginResponse',
+                fields={
+                    'user': UserSerializer(),
+                    'access': serializers.CharField(),
+                    'refresh': serializers.CharField(),
+                }
+            ),
+            401: inline_serializer(name='LoginError', fields={'detail': serializers.CharField()}),
+        }
+    )
     def post(self, request):
         email = request.data.get("email", "").strip().lower()
         password = request.data.get("password", "")
@@ -87,6 +124,23 @@ class LoginView(APIView):
 class GoogleAuthView(APIView):
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        summary="Google OAuth Login",
+        request=inline_serializer(
+            name='GoogleAuthRequest',
+            fields={'id_token': serializers.CharField()}
+        ),
+        responses={
+            200: inline_serializer(
+                name='GoogleAuthResponse',
+                fields={
+                    'user': UserSerializer(),
+                    'access': serializers.CharField(),
+                    'refresh': serializers.CharField(),
+                }
+            )
+        }
+    )
     def post(self, request):
         token = request.data.get("id_token", "")
         if not token:
@@ -149,5 +203,9 @@ class GoogleAuthView(APIView):
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary="Get Current User",
+        responses={200: UserSerializer}
+    )
     def get(self, request):
         return Response(UserSerializer(request.user).data)
