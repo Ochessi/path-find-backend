@@ -1,10 +1,15 @@
+import os
 from django.contrib import admin
 from django.urls import path, include
 
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
+admin_url = os.getenv("ADMIN_URL", "admin/")
+if not admin_url.endswith("/"):
+    admin_url += "/"
+
 urlpatterns = [
-    path("admin/", admin.site.urls),
+    path(admin_url, admin.site.urls),
     path("api/auth/", include("accounts.urls")),
     path("api/jobs/", include("jobs.urls")),
     
