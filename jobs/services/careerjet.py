@@ -73,7 +73,11 @@ class CareerjetService(BaseJobProvider):
             "user_agent": _BOT_USER_AGENT,
         }
 
-        response = requests.get(_BASE_URL, params=params, timeout=15)
+        headers = {
+            "Referer": "https://pathfind.app/jobs",
+        }
+
+        response = requests.get(_BASE_URL, params=params, headers=headers, timeout=15)
         response.raise_for_status()
         data = response.json()
 
