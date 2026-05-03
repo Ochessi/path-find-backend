@@ -69,3 +69,9 @@ def invalidate_profile_vector_cache(sender, instance, **kwargs) -> None:
         instance.pk,
         instance.user_id,
     )
+
+    if instance.headline:
+        from jobs.tasks import fetch_dynamic_jobs
+        location = instance.location or ""
+        fetch_dynamic_jobs.delay(instance.headline, location)
+

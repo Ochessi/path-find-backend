@@ -127,6 +127,50 @@ def fetch_all_jobs() -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Dynamic and Cleanup tasks
+# ---------------------------------------------------------------------------
+
+@shared_task(name="jobs.fetch_dynamic_jobs")
+def fetch_dynamic_jobs(query: str, location: str = "") -> dict:
+    """Fetch jobs dynamically for a specific query, with a 1-hour cooldown per query."""
+    from django.core.cache import cache
+    from jobs.services.adzuna import AdzunaService
+    from jobs.services.jooble import JoobleService
+    from jobs.services.careerjet import CareerjetService
+    from jobs.services.aggregator import JobAggregator
+    
+    cache_key = f"fetch_dynamic_lock:{query.lower()}:{location.lower()}"
+    if not cache.add(cache_key, "locked", timeout=3600):
+        logger.info("Skipping fetch_dynamic_jobs for %r (recently fetched)", query)
+        return {"status": "skipped", "reason": "rate_limited"}
+    
+    aggregator = JobAggregator(providers=[AdzunaService(), JoobleService(), CareerjetService()])
+    totals = {"saved": 0, "skipped": 0, "errors": 0}
+    
+    try:
+        stats = aggregator.run(query=query, location=location)
+        for key in totals:
+            totals[key] += stats[key]
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("fetch_dynamic_jobs error for %r: %s", query, exc)
+        
+    logger.info("fetch_dynamic_jobs complete for %r: %s", query, totals)
+    return totals
+
+@shared_task(name="jobs.cleanup_old_jobs")
+def cleanup_old_jobs() -> dict:
+    """Delete JobListing records older than 20 days."""
+    from django.utils import timezone
+    from datetime import timedelta
+    from jobs.models import JobListing
+    
+    threshold = timezone.now() - timedelta(days=20)
+    deleted_count, _ = JobListing.objects.filter(created_at__lt=threshold).delete()
+    
+    logger.info("cleanup_old_jobs: deleted %d jobs older than 20 days", deleted_count)
+    return {"deleted": deleted_count}
+
+# ---------------------------------------------------------------------------
 # Semantic Matching — Embedding tasks
 # ---------------------------------------------------------------------------
 

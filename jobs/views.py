@@ -47,6 +47,29 @@ class JobListingViewSet(viewsets.ModelViewSet):
             return [permissions.IsAdminUser()]
         return super().get_permissions()
 
+    def list(self, request, *args, **kwargs):
+        """Standard job listing with search-driven ingestion.
+
+        If a user supplies a `keyword` query param and fewer than 10 results
+        are found in the local database, we kick off a background fetch from
+        all external job boards using that keyword so future requests hit the DB.
+        """
+        response = super().list(request, *args, **kwargs)
+
+        keyword = request.query_params.get("keyword") or request.query_params.get("search")
+        location = request.query_params.get("location", "")
+        if keyword:
+            count = response.data.get("count", 0)
+            if count < 10:
+                from jobs.tasks import fetch_dynamic_jobs
+                logger.info(
+                    "search-driven ingestion triggered for keyword=%r location=%r (local count=%d)",
+                    keyword, location, count,
+                )
+                fetch_dynamic_jobs.delay(keyword, location)
+
+        return response
+
 
 class DocumentViewSet(viewsets.ModelViewSet):
     """

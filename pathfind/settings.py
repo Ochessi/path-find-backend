@@ -310,6 +310,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "jobs.recompute_all_embeddings",
         "schedule": crontab(minute=0, hour=3),  # 3 AM UTC
     },
+    "cleanup-old-jobs-daily": {
+        "task": "jobs.cleanup_old_jobs",
+        "schedule": crontab(minute=0, hour=4),  # 4 AM UTC
+    },
 }
 
 # ---------------------------------------------------------------------------
