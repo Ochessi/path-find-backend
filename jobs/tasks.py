@@ -24,11 +24,11 @@ logger = logging.getLogger(__name__)
 
 # Default search parameters — override via Django settings if needed.
 _DEFAULT_QUERIES = [
-    ("software engineer", "remote"),
-    ("data scientist", "remote"),
-    ("product manager", "remote"),
-    ("backend developer", "remote"),
-    ("frontend developer", "remote"),
+    ("software engineer", ""),
+    ("data scientist", ""),
+    ("product manager", ""),
+    ("backend developer", ""),
+    ("frontend developer", ""),
 ]
 
 
