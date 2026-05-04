@@ -54,8 +54,8 @@ class RegisterView(APIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
 
-        # Explicitly create an empty Profile for every new email/password user.
-        Profile.objects.create(user=user)
+        # get_or_create is safe if a post_save signal already created a Profile.
+        Profile.objects.get_or_create(user=user)
 
         return Response(
             {"user": UserSerializer(user).data, **_jwt_pair(user)},
@@ -191,8 +191,8 @@ class GoogleAuthView(APIView):
                 avatar_url=avatar_url,
                 google_id=google_id,
             )
-            # Explicitly create an empty Profile for every new Google OAuth user.
-            Profile.objects.create(user=user)
+            # get_or_create is safe if a post_save signal already created a Profile.
+            Profile.objects.get_or_create(user=user)
 
         return Response({"user": UserSerializer(user).data, **_jwt_pair(user)})
 
