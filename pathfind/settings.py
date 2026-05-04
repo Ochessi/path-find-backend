@@ -382,6 +382,14 @@ EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 # ---------------------------------------------------------------------------
+# Browserbase — remote browser sessions for portal auto-submission
+# ---------------------------------------------------------------------------
+# Sign up at https://browserbase.com to obtain these credentials.
+# Required by jobs.tasks.portal_submission.submit_to_portal_task
+BROWSERBASE_API_KEY    = os.getenv("BROWSERBASE_API_KEY", "")
+BROWSERBASE_PROJECT_ID = os.getenv("BROWSERBASE_PROJECT_ID", "")
+
+# ---------------------------------------------------------------------------
 # Logging Configuration
 # ---------------------------------------------------------------------------
 LOGGING = {

@@ -822,6 +822,70 @@ class TaskStatusView(APIView):
 
 
 # ---------------------------------------------------------------------------
+# Portal Submission Trigger
+# ---------------------------------------------------------------------------
+
+class SubmitPortalView(APIView):
+    """
+    POST /api/jobs/applications/{id}/submit-portal/
+
+    Enqueues the Browserbase + Playwright portal-submission task for the given
+    Application.  The caller should poll ``GET /api/jobs/tasks/<task_id>/``
+    (TaskStatusView) to track progress.
+
+    Path parameters
+    ---------------
+    id : int
+        Primary key of the Application record owned by the authenticated user.
+
+    Response 202
+    ------------
+    ::
+
+        { "task_id": "<celery-task-id>", "status": "processing" }
+
+    Error responses
+    ---------------
+    - 404 if the application does not exist or belongs to another user.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        summary="Submit Application to Portal",
+        description=(
+            "Enqueue an automated browser-based form submission for this application. "
+            "Poll GET /api/jobs/tasks/<task_id>/ for progress."
+        ),
+        request=None,
+        responses={
+            202: inline_serializer(
+                name="SubmitPortalAccepted",
+                fields={
+                    "task_id": serializers.CharField(),
+                    "status": serializers.CharField(),
+                },
+            )
+        },
+    )
+    def post(self, request, pk):
+        application = get_object_or_404(Application, pk=pk, user=request.user)
+        from jobs.tasks import submit_to_portal_task
+
+        task = submit_to_portal_task.delay(application.id)
+        logger.info(
+            "SubmitPortalView: queued task %s for Application #%s (user=%s)",
+            task.id,
+            application.id,
+            request.user.pk,
+        )
+        return Response(
+            {"task_id": task.id, "status": "processing"},
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
+# ---------------------------------------------------------------------------
 # Manual Job Fetch Trigger
 # ---------------------------------------------------------------------------
 

@@ -11,6 +11,7 @@ from .views import (
     ApplicationAIGenerateView,
     TaskStatusView,
     FetchJobsView,
+    SubmitPortalView,
 )
 
 router = DefaultRouter()
@@ -28,6 +29,8 @@ urlpatterns = [
     path("embedding-status/", EmbeddingStatusView.as_view(), name="embedding-status"),
     # AI Content Generation for applications
     path("applications/generate/", ApplicationAIGenerateView.as_view(), name="application-generate"),
+    # Portal submission — triggers Browserbase automation, returns task_id for polling
+    path("applications/<int:pk>/submit-portal/", SubmitPortalView.as_view(), name="application-submit-portal"),
     # Task Status checking
     path("tasks/<str:task_id>/", TaskStatusView.as_view(), name="task-status"),
     # Manual Job Fetching

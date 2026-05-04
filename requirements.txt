@@ -94,4 +94,8 @@ weasel==1.0.0
 wrapt==2.1.2
 google-generativeai==0.8.6
 drf-spectacular==0.29.0
-drf-spectacular==0.29.0
+# Portal auto-submission — browser automation via Browserbase + Playwright
+playwright>=1.44.0
+browserbase>=1.1.0
+# Server-side resume PDF generation (fallback when user has no uploaded resume)
+reportlab>=4.0.0
