@@ -21,25 +21,14 @@ from typing import BinaryIO
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# spaCy model — loaded once per process
+# spaCy model — loaded once per process (lazy)
 # ---------------------------------------------------------------------------
-try:
-    import spacy
-    from spacy.matcher import PhraseMatcher
+import threading
 
-    _NLP = spacy.load("en_core_web_md")
-    _SPACY_AVAILABLE = True
-except OSError:
-    logger.warning(
-        "spaCy model 'en_core_web_md' not found. "
-        "Run: python -m spacy download en_core_web_md"
-    )
-    _NLP = None
-    _SPACY_AVAILABLE = False
-except ImportError:
-    logger.warning("spaCy is not installed. Resume parsing will be degraded.")
-    _NLP = None
-    _SPACY_AVAILABLE = False
+_spacy_lock = threading.Lock()
+_NLP = None
+_SPACY_AVAILABLE = None
+_SKILL_MATCHER = None
 
 # ---------------------------------------------------------------------------
 # Skill vocabulary
@@ -84,14 +73,43 @@ _SKILL_VOCAB: list[str] = [
 ]
 
 # ---------------------------------------------------------------------------
-# Phrase matcher (built once after model loads)
+# Phrase matcher and lazy model loader
 # ---------------------------------------------------------------------------
-_SKILL_MATCHER: "PhraseMatcher | None" = None
+def _get_nlp():
+    global _NLP, _SPACY_AVAILABLE, _SKILL_MATCHER
+    
+    if _SPACY_AVAILABLE is not None:
+        return _NLP, _SKILL_MATCHER, _SPACY_AVAILABLE
 
-if _SPACY_AVAILABLE and _NLP is not None:
-    _SKILL_MATCHER = PhraseMatcher(_NLP.vocab, attr="LOWER")
-    _patterns = [_NLP.make_doc(skill.lower()) for skill in _SKILL_VOCAB]
-    _SKILL_MATCHER.add("SKILL", _patterns)
+    with _spacy_lock:
+        if _SPACY_AVAILABLE is not None:
+            return _NLP, _SKILL_MATCHER, _SPACY_AVAILABLE
+
+        try:
+            import spacy
+            from spacy.matcher import PhraseMatcher
+
+            logger.info("Loading spaCy model 'en_core_web_md'...")
+            _NLP = spacy.load("en_core_web_md")
+            _SPACY_AVAILABLE = True
+            
+            _SKILL_MATCHER = PhraseMatcher(_NLP.vocab, attr="LOWER")
+            _patterns = [_NLP.make_doc(skill.lower()) for skill in _SKILL_VOCAB]
+            _SKILL_MATCHER.add("SKILL", _patterns)
+            logger.info("spaCy model loaded successfully.")
+        except OSError:
+            logger.warning(
+                "spaCy model 'en_core_web_md' not found. "
+                "Run: python -m spacy download en_core_web_md"
+            )
+            _NLP = None
+            _SPACY_AVAILABLE = False
+        except ImportError:
+            logger.warning("spaCy is not installed. Resume parsing will be degraded.")
+            _NLP = None
+            _SPACY_AVAILABLE = False
+
+    return _NLP, _SKILL_MATCHER, _SPACY_AVAILABLE
 
 # ---------------------------------------------------------------------------
 # Job-title heuristics
@@ -222,7 +240,9 @@ class ResumeParser:
 
         emails = list(dict.fromkeys(_EMAIL_RE.findall(text)))
 
-        if not _SPACY_AVAILABLE or _NLP is None:
+        nlp, skill_matcher, spacy_available = _get_nlp()
+
+        if not spacy_available or nlp is None:
             # Degraded mode: return what we can without spaCy
             logger.warning("Running resume parser in degraded mode (no spaCy).")
             return {
@@ -233,13 +253,13 @@ class ResumeParser:
                 "emails": emails,
             }
 
-        doc = _NLP(text)
+        doc = nlp(text)
 
         # ── Skills via PhraseMatcher ──────────────────────────────────────────
         skills: list[str] = []
-        if _SKILL_MATCHER is not None:
+        if skill_matcher is not None:
             seen_lower: set[str] = set()
-            for _match_id, start, end in _SKILL_MATCHER(doc):
+            for _match_id, start, end in skill_matcher(doc):
                 span_text = doc[start:end].text
                 if span_text.lower() not in seen_lower:
                     seen_lower.add(span_text.lower())
