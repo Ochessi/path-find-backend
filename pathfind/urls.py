@@ -8,7 +8,13 @@ admin_url = os.getenv("ADMIN_URL", "admin/")
 if not admin_url.endswith("/"):
     admin_url += "/"
 
+from django.http import HttpResponse
+
+def health_check(request):
+    return HttpResponse("OK")
+
 urlpatterns = [
+    path("", health_check, name="health_check"),
     path(admin_url, admin.site.urls),
     path("api/auth/", include("accounts.urls")),
     path("api/jobs/", include("jobs.urls")),
