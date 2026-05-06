@@ -321,12 +321,16 @@ CELERY_BEAT_SCHEDULE = {
 # and avoid redundant SBERT inference on every request.
 #
 # Production: uses Redis (same instance as Celery broker, zero extra infra).
-# Development: falls back to LocMemCache if django-redis is not installed.
+# Development: falls back to LocMemCache.
 # ---------------------------------------------------------------------------
-_redis_url = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
 
-try:
-    import django_redis  # noqa: F401  — imported only to test availability
+# Explicit toggle to activate Redis. Defaults to False for local development.
+USE_REDIS = os.getenv("USE_REDIS", "False").lower() == "true"
+
+if USE_REDIS:
+    # Grabs the internal connection string you pasted into your environment variables
+    _redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    
     CACHES = {
         "default": {
             "BACKEND": "django_redis.cache.RedisCache",
@@ -340,8 +344,8 @@ try:
             "TIMEOUT": 3600,  # default TTL: 1 hour
         }
     }
-except ImportError:
-    # Fallback for environments where django-redis is not installed yet.
+else:
+    # Fallback for local development environments
     CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
