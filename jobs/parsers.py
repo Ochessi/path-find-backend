@@ -144,7 +144,18 @@ _TITLE_PATTERNS = re.compile(
 # ---------------------------------------------------------------------------
 # Email regex
 # ---------------------------------------------------------------------------
-_EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
+_EMAIL_RE    = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
+_LINKEDIN_RE = re.compile(r"https?://(?:www\.)?linkedin\.com/in/[A-Za-z0-9\-_%]+/?")
+_PORTFOLIO_RE = re.compile(
+    r"https?://(?:www\.)?(?!linkedin\.com)[A-Za-z0-9\-\.]+\.[a-z]{2,}(?:/[^\s]*)?"
+)
+
+# Stop-words that should NOT be treated as a person name
+_NON_NAME_TOKENS = {
+    "resume", "curriculum", "vitae", "cv", "objective", "summary", "profile",
+    "experience", "education", "skills", "contact", "references", "portfolio",
+    "email", "phone", "address", "linkedin",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -228,17 +239,37 @@ class ResumeParser:
         """
         Main entry point. Returns a dict with:
 
-            text        str             — raw extracted text
-            skills      list[str]       — matched skill names (deduplicated)
-            job_titles  list[str]       — matched job-title patterns
-            companies   list[str]       — ORG entities from NER
-            emails      list[str]       — email addresses
+            text          str             — raw extracted text
+            name          str | None      — full name of the candidate
+            skills        list[str]       — matched skill names (deduplicated)
+            job_titles    list[str]       — matched job-title patterns
+            companies     list[str]       — ORG entities from NER
+            emails        list[str]       — email addresses
+            linkedin_url  str | None      — LinkedIn profile URL
+            portfolio_url str | None      — personal website / GitHub URL
+            location      str | None      — city/country from GPE or LOC entity
+            summary       str | None      — first substantial paragraph as summary
         """
         text = self.extract_text(file_bytes, content_type)
         if not text.strip():
-            return {"text": "", "skills": [], "job_titles": [], "companies": [], "emails": []}
+            return {
+                "text": "", "name": None, "skills": [], "job_titles": [],
+                "companies": [], "emails": [], "linkedin_url": None,
+                "portfolio_url": None, "location": None, "summary": None,
+            }
 
         emails = list(dict.fromkeys(_EMAIL_RE.findall(text)))
+
+        # ── LinkedIn URL ──────────────────────────────────────────────────────
+        linkedin_matches = _LINKEDIN_RE.findall(text)
+        linkedin_url = linkedin_matches[0].rstrip("/") if linkedin_matches else None
+
+        # ── Portfolio / Website URL ───────────────────────────────────────────
+        portfolio_url: str | None = None
+        for url in _PORTFOLIO_RE.findall(text):
+            if "linkedin.com" not in url.lower():
+                portfolio_url = url.rstrip("/")
+                break
 
         nlp, skill_matcher, spacy_available = _get_nlp()
 
@@ -247,11 +278,24 @@ class ResumeParser:
             logger.warning("Running resume parser in degraded mode (no spaCy).")
             return {
                 "text": text,
+                "name": None,
                 "skills": [],
                 "job_titles": [],
                 "companies": [],
                 "emails": emails,
+                "linkedin_url": linkedin_url,
+                "portfolio_url": portfolio_url,
+                "location": None,
+                "summary": None,
             }
+
+        # ── Summary: first substantial paragraph (>=60 chars, not all-caps) ───
+        summary: str | None = None
+        for para in text.split("\n"):
+            stripped = para.strip()
+            if len(stripped) >= 60 and not stripped.isupper():
+                summary = stripped
+                break
 
         doc = nlp(text)
 
@@ -270,13 +314,29 @@ class ResumeParser:
                     )
                     skills.append(canonical)
 
-        # ── Companies via NER (ORG label) ─────────────────────────────────────
+        # ── Name, Companies, and Location via NER ─────────────────────────────
+        candidate_name: str | None = None
         companies: list[str] = []
         seen_orgs: set[str] = set()
+        location: str | None = None
+
         for ent in doc.ents:
-            if ent.label_ == "ORG" and ent.text.strip() not in seen_orgs:
-                seen_orgs.add(ent.text.strip())
-                companies.append(ent.text.strip())
+            stripped = ent.text.strip()
+            if not stripped:
+                continue
+
+            if ent.label_ == "PERSON" and candidate_name is None:
+                # The name is almost always the first PERSON entity in a resume.
+                # Filter out tokens that are obviously not a human name.
+                if stripped.lower() not in _NON_NAME_TOKENS and len(stripped.split()) >= 2:
+                    candidate_name = stripped
+
+            elif ent.label_ == "ORG" and stripped not in seen_orgs:
+                seen_orgs.add(stripped)
+                companies.append(stripped)
+
+            elif ent.label_ in ("GPE", "LOC") and location is None:
+                location = stripped
 
         # ── Job titles via regex ──────────────────────────────────────────────
         job_titles: list[str] = []
@@ -289,8 +349,13 @@ class ResumeParser:
 
         return {
             "text": text,
+            "name": candidate_name,
             "skills": skills,
             "job_titles": job_titles,
             "companies": companies,
             "emails": emails,
+            "linkedin_url": linkedin_url,
+            "portfolio_url": portfolio_url,
+            "location": location,
+            "summary": summary,
         }

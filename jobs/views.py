@@ -217,10 +217,11 @@ class ResumeParseView(APIView):
 
         file_bytes = uploaded_file.read()
         file_base64 = base64.b64encode(file_bytes).decode("utf-8")
+        original_filename = uploaded_file.name or "resume"
 
         from jobs.tasks import parse_resume_task
 
-        task = parse_resume_task.delay(request.user.id, file_base64, content_type)
+        task = parse_resume_task.delay(request.user.id, file_base64, content_type, original_filename)
 
         return Response(
             {"task_id": task.id, "status": "processing"},
@@ -230,23 +231,34 @@ class ResumeParseView(APIView):
     @staticmethod
     def _update_profile(user, extracted: dict) -> dict:
         """
-        Merge NLP-extracted entities into the Profile model.
+        Merge NLP-extracted entities into the User and Profile models.
 
-        Rules:
-        - Skills: append newly found skills (by name, case-insensitive dedup).
-        - Headline: set only if profile.headline is currently blank and we
-          found at least one job title.
-        - Experience: append a placeholder entry for each unique company
-          found in the resume that isn't already in the experience list.
+        Rules (all fields are only set if the target is currently blank):
+        - full_name:     populated from the extracted candidate name.
+        - Headline:      populated from the first extracted job title.
+        - bio:           populated from the extracted summary paragraph.
+        - location:      populated from the first GPE/LOC entity.
+        - linkedin_url:  populated from the LinkedIn URL found in the resume.
+        - portfolio_url: populated from the portfolio/website URL found in the resume.
+        - Skills:        append newly found skills (case-insensitive dedup).
+        - Experience:    append a stub entry for each unique new company found.
         """
         try:
             profile = user.profile
         except Exception:  # noqa: BLE001
-            # Profile doesn't exist yet — create it.
             from accounts.models import Profile
             profile = Profile.objects.create(user=user)
 
+        user_changed = False
         changed = False
+
+        # ── Full name (User model) ─────────────────────────────────────────
+        extracted_name = extracted.get("name")
+        if extracted_name and not user.full_name:
+            user.full_name = extracted_name
+            user_changed = True
+        if user_changed:
+            user.save(update_fields=["full_name"])
 
         # ── Skills ────────────────────────────────────────────────────────
         existing_skill_names: set[str] = {
@@ -267,6 +279,30 @@ class ResumeParseView(APIView):
             if job_titles:
                 profile.headline = job_titles[0]
                 changed = True
+
+        # ── Bio / Summary ─────────────────────────────────────────────────
+        extracted_summary = extracted.get("summary")
+        if extracted_summary and not profile.bio:
+            profile.bio = extracted_summary
+            changed = True
+
+        # ── Location ──────────────────────────────────────────────────────
+        extracted_location = extracted.get("location")
+        if extracted_location and not profile.location:
+            profile.location = extracted_location
+            changed = True
+
+        # ── LinkedIn URL ──────────────────────────────────────────────────
+        extracted_linkedin = extracted.get("linkedin_url")
+        if extracted_linkedin and not profile.linkedin_url:
+            profile.linkedin_url = extracted_linkedin
+            changed = True
+
+        # ── Portfolio URL ─────────────────────────────────────────────────
+        extracted_portfolio = extracted.get("portfolio_url")
+        if extracted_portfolio and not profile.portfolio_url:
+            profile.portfolio_url = extracted_portfolio
+            changed = True
 
         # ── Experience (company stubs) ─────────────────────────────────────
         existing_companies: set[str] = {
@@ -291,10 +327,19 @@ class ResumeParseView(APIView):
             profile.experience = new_experience
 
         if changed:
-            profile.save(update_fields=["skills", "headline", "experience", "updated_at"])
+            profile.save(update_fields=[
+                "skills", "headline", "experience", "bio",
+                "location", "linkedin_url", "portfolio_url", "updated_at",
+            ])
 
         return {
+            "name": user.full_name,
+            "email": user.email,
             "headline": profile.headline,
+            "bio": profile.bio,
+            "location": profile.location,
+            "linkedin_url": profile.linkedin_url,
+            "portfolio_url": profile.portfolio_url,
             "skills": profile.skills,
             "experience": profile.experience,
         }

@@ -3,6 +3,11 @@ from django.contrib.postgres.fields import ArrayField
 from django.db import models
 
 
+def _resume_upload_path(instance, filename):
+    """Store master resumes under media/resumes/<user_id>/<filename>."""
+    return f"resumes/{instance.user_id}/{filename}"
+
+
 # ---------------------------------------------------------------------------
 # Choice enumerations
 # ---------------------------------------------------------------------------
@@ -206,6 +211,19 @@ class Document(models.Model):
     is_ai_generated = models.BooleanField(
         default=False,
         help_text="True if this document was generated or tailored by Pathfind AI.",
+    )
+    is_master = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="True if this is the user's original uploaded Master Resume.",
+    )
+    # Raw file stored locally (populated during resume-parse onboarding).
+    # Cloud-hosted documents leave this blank and use file_url instead.
+    file = models.FileField(
+        upload_to=_resume_upload_path,
+        null=True,
+        blank=True,
+        help_text="Raw uploaded file (local storage fallback when no cloud bucket is set).",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)

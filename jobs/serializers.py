@@ -88,6 +88,8 @@ class DocumentSerializer(serializers.ModelSerializer):
             "doc_type",
             "doc_type_display",
             "is_ai_generated",
+            "is_master",
+            "file",
             "created_at",
         )
         read_only_fields = ("id", "user", "created_at")

@@ -273,11 +273,14 @@ def recompute_all_embeddings() -> dict:
     }
 
 @shared_task(bind=True)
-def parse_resume_task(self, user_id: int, file_base64: str, content_type: str) -> dict:
+def parse_resume_task(self, user_id: int, file_base64: str, content_type: str, original_filename: str = "resume") -> dict:
     import base64
+    from io import BytesIO
+    from django.core.files.base import ContentFile
     from django.contrib.auth import get_user_model
     from jobs.parsers import ResumeParser
     from jobs.views import ResumeParseView
+    from jobs.models import Document, DocumentType
 
     User = get_user_model()
     try:
@@ -287,17 +290,37 @@ def parse_resume_task(self, user_id: int, file_base64: str, content_type: str) -
 
     file_bytes = base64.b64decode(file_base64)
     parser = ResumeParser()
-    
+
     try:
         extracted = parser.parse(file_bytes, content_type)
     except Exception as exc:
         logger.exception("Resume parsing failed in task: %s", exc)
         return {"error": "Resume parsing failed. Please try again."}
 
-    # Merge extracted data into the user's Profile
+    # ── Save as Master Resume Document ──────────────────────────────────────
+    # Demote any previous master resume for this user first.
+    Document.objects.filter(user=user, is_master=True).update(is_master=False)
+
+    # Save the raw file bytes to the document FileField (local storage).
+    doc = Document(
+        user=user,
+        file_name=original_filename,
+        file_url="",          # no cloud URL yet; file field holds the bytes
+        doc_type=DocumentType.RESUME,
+        is_master=True,
+        is_ai_generated=False,
+    )
+    doc.file.save(original_filename, ContentFile(file_bytes), save=False)
+    doc.save()
+
+    # ── Merge extracted data into the user's Profile ─────────────────────────
     profile_updated = ResumeParseView._update_profile(user, extracted)
 
-    return {"extracted": extracted, "profile_updated": profile_updated}
+    return {
+        "extracted": extracted,
+        "profile_updated": profile_updated,
+        "master_resume_id": doc.pk,
+    }
 
 @shared_task(bind=True)
 def generate_application_content_task(self, user_id: int, job_listing_id: int) -> dict:
