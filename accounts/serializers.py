@@ -52,8 +52,17 @@ class UserSerializer(serializers.ModelSerializer):
     """Read-only user representation, optionally includes nested profile."""
 
     profile = ProfileSerializer(read_only=True)
+    onboarding_complete = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ("id", "email", "full_name", "avatar_url", "date_joined", "profile")
+        fields = ("id", "email", "full_name", "avatar_url", "date_joined", "profile", "onboarding_complete")
         read_only_fields = ("id", "date_joined")
+
+    def get_onboarding_complete(self, obj):
+        """Expose onboarding_complete from profile.job_preferences as a top-level bool."""
+        try:
+            prefs = obj.profile.job_preferences or {}
+            return bool(prefs.get("onboarding_complete", False))
+        except Exception:
+            return False
