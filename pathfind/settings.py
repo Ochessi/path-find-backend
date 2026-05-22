@@ -285,6 +285,13 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 
+# Route user-facing, latency-sensitive tasks to a dedicated high-priority queue
+CELERY_TASK_ROUTES = {
+    'jobs.tasks.ingestion.parse_resume_task': {'queue': 'high_priority'},
+    'jobs.tasks.ingestion.generate_application_content_task': {'queue': 'high_priority'},
+    'jobs.submit_to_portal': {'queue': 'high_priority'},
+}
+
 # Use django_celery_beat's DB-backed scheduler so beat can be managed via admin.
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 
