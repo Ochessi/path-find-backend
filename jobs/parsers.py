@@ -72,6 +72,12 @@ _SKILL_VOCAB: list[str] = [
     "mentoring", "coaching", "public speaking",
 ]
 
+_SOFT_SKILLS: set[str] = {
+    "leadership", "communication", "teamwork", "problem solving",
+    "critical thinking", "project management", "stakeholder management",
+    "mentoring", "coaching", "public speaking",
+}
+
 # ---------------------------------------------------------------------------
 # Phrase matcher and lazy model loader
 # ---------------------------------------------------------------------------
@@ -142,9 +148,12 @@ _TITLE_PATTERNS = re.compile(
 )
 
 # ---------------------------------------------------------------------------
-# Email regex
+# Email, phone, and URL regexes
 # ---------------------------------------------------------------------------
 _EMAIL_RE    = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
+_PHONE_RE    = re.compile(
+    r"(?:\+?\d[\s.\-]?)?(?:\(?\d{3}\)?[\s.\-]?){1,2}\d{3,4}[\s.\-]?\d{3,4}"
+)
 _LINKEDIN_RE = re.compile(r"https?://(?:www\.)?linkedin\.com/in/[A-Za-z0-9\-_%]+/?")
 _PORTFOLIO_RE = re.compile(
     r"https?://(?:www\.)?(?!linkedin\.com)[A-Za-z0-9\-\.]+\.[a-z]{2,}(?:/[^\s]*)?"
@@ -155,6 +164,50 @@ _NON_NAME_TOKENS = {
     "resume", "curriculum", "vitae", "cv", "objective", "summary", "profile",
     "experience", "education", "skills", "contact", "references", "portfolio",
     "email", "phone", "address", "linkedin",
+}
+
+# ---------------------------------------------------------------------------
+# Education keywords
+# ---------------------------------------------------------------------------
+_DEGREE_PATTERNS = re.compile(
+    r"\b(bachelor(?:'?s)?(?:\s+of\s+[\w\s]+)?|b\.?s\.?c?\.?|b\.?a\.?|master(?:'?s)?(?:\s+of\s+[\w\s]+)?|m\.?s\.?c?\.?|m\.?b\.?a\.?|ph\.?d\.?|doctorate|associate(?:'?s)?|diploma|certificate|bsc|msc|mba|phd)\b",
+    re.IGNORECASE,
+)
+_INSTITUTION_KEYWORDS = {
+    "university", "college", "institute", "school", "academy", "polytechnic", "faculty",
+}
+_YEAR_RE = re.compile(r"\b(19|20)\d{2}\b")
+
+# ---------------------------------------------------------------------------
+# Career intelligence patterns
+# ---------------------------------------------------------------------------
+_YEARS_EXP_RE = re.compile(
+    r"(\d+)\+?\s+years?(?:\s+of)?(?:\s+(?:professional|work|hands[\-\s]on|industry|relevant))?\s+experience",
+    re.IGNORECASE,
+)
+
+_DOMAIN_KEYWORDS: dict[str, list[str]] = {
+    "Software Engineering": ["software engineer", "backend", "frontend", r"full.?stack", "developer", "programmer"],
+    "Data Science": ["data scientist", "machine learning", "deep learning", "nlp", "data analysis"],
+    "Data Engineering": ["data engineer", "etl", "pipeline", "spark", "hadoop", "kafka"],
+    "DevOps / Cloud": ["devops", "cloud", "infrastructure", "kubernetes", "terraform", "ci/cd", "sre"],
+    "Product Management": ["product manager", "product owner", "roadmap", "agile", "scrum"],
+    "Design / UX": ["ux", "ui", "designer", "figma", "user experience", "interaction design"],
+    "Cybersecurity": ["security", "penetration", "ethical hack", "soc", "vulnerability"],
+    "Mobile Development": ["mobile", "android", "ios", "react native", "flutter"],
+    "QA / Testing": ["quality assurance", "qa", "test automation", "selenium"],
+    "Management / Leadership": ["engineering manager", "team lead", "director", "vp of engineering"],
+}
+
+_SPECIALIZATION_KEYWORDS: dict[str, list[str]] = {
+    "Frontend": ["react", "vue", "angular", "frontend", "html", "css", r"next\.?js"],
+    "Backend": ["backend", "django", "flask", "spring", "node", "api", "rest"],
+    "Full Stack": [r"full.?stack"],
+    "AI / ML": ["machine learning", "deep learning", "tensorflow", "pytorch", "nlp", "llm"],
+    "Cloud / DevOps": ["aws", "azure", "gcp", "kubernetes", "docker", "terraform"],
+    "Mobile": ["android", "ios", "react native", "flutter", "kotlin", "swift"],
+    "Data": ["pandas", "spark", "sql", "tableau", "power bi", "bigquery"],
+    "Security": ["security", "pentest", "soc", "siem", "vulnerability"],
 }
 
 
@@ -239,26 +292,41 @@ class ResumeParser:
         """
         Main entry point. Returns a dict with:
 
-            text          str             — raw extracted text
-            name          str | None      — full name of the candidate
-            skills        list[str]       — matched skill names (deduplicated)
-            job_titles    list[str]       — matched job-title patterns
-            companies     list[str]       — ORG entities from NER
-            emails        list[str]       — email addresses
-            linkedin_url  str | None      — LinkedIn profile URL
-            portfolio_url str | None      — personal website / GitHub URL
-            location      str | None      — city/country from GPE or LOC entity
-            summary       str | None      — first substantial paragraph as summary
+            text              str             — raw extracted text
+            name              str | None      — full name of the candidate
+            phone             str | None      — phone number
+            skills            list[str]       — all matched skill names (deduplicated)
+            hard_skills       list[str]       — technical / tool skills
+            soft_skills       list[str]       — interpersonal skills
+            job_titles        list[str]       — matched job-title patterns
+            companies         list[str]       — ORG entities from NER
+            emails            list[str]       — email addresses
+            linkedin_url      str | None      — LinkedIn profile URL
+            portfolio_url     str | None      — personal website / GitHub URL
+            location          str | None      — city/country from GPE or LOC entity
+            summary           str | None      — first substantial paragraph as summary
+            education         list[dict]      — extracted education entries
+            career_intelligence dict          — {years_experience, primary_domain, specializations}
         """
         text = self.extract_text(file_bytes, content_type)
         if not text.strip():
             return {
-                "text": "", "name": None, "skills": [], "job_titles": [],
-                "companies": [], "emails": [], "linkedin_url": None,
-                "portfolio_url": None, "location": None, "summary": None,
+                "text": "", "name": None, "phone": None, "skills": [], "hard_skills": [],
+                "soft_skills": [], "job_titles": [], "companies": [], "emails": [],
+                "linkedin_url": None, "portfolio_url": None, "location": None,
+                "summary": None, "education": [], "career_intelligence": {},
             }
 
         emails = list(dict.fromkeys(_EMAIL_RE.findall(text)))
+
+        # ── Phone number ──────────────────────────────────────────────────────
+        phone: str | None = None
+        phone_matches = _PHONE_RE.findall(text)
+        if phone_matches:
+            candidate_phone = phone_matches[0].strip()
+            # Only accept if it has at least 7 digits
+            if len(re.sub(r"\D", "", candidate_phone)) >= 7:
+                phone = candidate_phone
 
         # ── LinkedIn URL ──────────────────────────────────────────────────────
         linkedin_matches = _LINKEDIN_RE.findall(text)
@@ -271,6 +339,9 @@ class ResumeParser:
                 portfolio_url = url.rstrip("/")
                 break
 
+        # ── Career Intelligence ───────────────────────────────────────────────
+        career_intelligence = self._extract_career_intelligence(text)
+
         nlp, skill_matcher, spacy_available = _get_nlp()
 
         if not spacy_available or nlp is None:
@@ -279,7 +350,10 @@ class ResumeParser:
             return {
                 "text": text,
                 "name": None,
+                "phone": phone,
                 "skills": [],
+                "hard_skills": [],
+                "soft_skills": [],
                 "job_titles": [],
                 "companies": [],
                 "emails": emails,
@@ -287,6 +361,8 @@ class ResumeParser:
                 "portfolio_url": portfolio_url,
                 "location": None,
                 "summary": None,
+                "education": [],
+                "career_intelligence": career_intelligence,
             }
 
         # ── Summary: first substantial paragraph (>=60 chars, not all-caps) ───
@@ -347,10 +423,21 @@ class ResumeParser:
                 seen_titles.add(title_str.lower())
                 job_titles.append(title_str.title())
 
+        # ── Separate hard vs soft skills ──────────────────────────────────────
+        soft_lower = {s.lower() for s in _SOFT_SKILLS}
+        hard_skills = [s for s in skills if s.lower() not in soft_lower]
+        soft_skills = [s for s in skills if s.lower() in soft_lower]
+
+        # ── Education extraction ──────────────────────────────────────────────
+        education = self._extract_education(text, doc)
+
         return {
             "text": text,
             "name": candidate_name,
+            "phone": phone,
             "skills": skills,
+            "hard_skills": hard_skills,
+            "soft_skills": soft_skills,
             "job_titles": job_titles,
             "companies": companies,
             "emails": emails,
@@ -358,4 +445,84 @@ class ResumeParser:
             "portfolio_url": portfolio_url,
             "location": location,
             "summary": summary,
+            "education": education,
+            "career_intelligence": career_intelligence,
         }
+
+    # ── Helper: career intelligence ───────────────────────────────────────────
+
+    def _extract_career_intelligence(self, text: str) -> dict:
+        """Extract years of experience, primary domain, and specializations."""
+        text_lower = text.lower()
+
+        # Years of experience
+        years_experience: int | None = None
+        for match in _YEARS_EXP_RE.finditer(text):
+            try:
+                val = int(match.group(1))
+                if years_experience is None or val > years_experience:
+                    years_experience = val
+            except ValueError:
+                pass
+
+        # Primary domain
+        primary_domain: str | None = None
+        best_domain_hits = 0
+        for domain, patterns in _DOMAIN_KEYWORDS.items():
+            hits = sum(
+                1 for p in patterns if re.search(p, text_lower, re.IGNORECASE)
+            )
+            if hits > best_domain_hits:
+                best_domain_hits = hits
+                primary_domain = domain
+
+        # Specializations
+        specializations: list[str] = []
+        for spec, patterns in _SPECIALIZATION_KEYWORDS.items():
+            if any(re.search(p, text_lower, re.IGNORECASE) for p in patterns):
+                specializations.append(spec)
+
+        return {
+            "years_experience": years_experience,
+            "primary_domain": primary_domain,
+            "specializations": specializations,
+        }
+
+    # ── Helper: education extraction ──────────────────────────────────────────
+
+    def _extract_education(self, text: str, doc) -> list[dict]:
+        """Extract education entries from resume text."""
+        education: list[dict] = []
+        seen_institutions: set[str] = set()
+
+        lines = text.split("\n")
+
+        for ent in doc.ents:
+            if ent.label_ != "ORG":
+                continue
+            org_name = ent.text.strip()
+            org_lower = org_name.lower()
+            if any(kw in org_lower for kw in _INSTITUTION_KEYWORDS) and org_lower not in seen_institutions:
+                seen_institutions.add(org_lower)
+                # Find degree and years near this entity
+                context_start = max(0, ent.start_char - 300)
+                context_end = min(len(text), ent.end_char + 300)
+                context = text[context_start:context_end]
+
+                degree_match = _DEGREE_PATTERNS.search(context)
+                degree = degree_match.group(0).title() if degree_match else ""
+
+                year_matches = _YEAR_RE.findall(context)
+                start_year = int(year_matches[0]) if year_matches else None
+                end_year = int(year_matches[1]) if len(year_matches) > 1 else None
+
+                education.append({
+                    "institution": org_name,
+                    "degree": degree,
+                    "field_of_study": "",
+                    "start_year": start_year,
+                    "end_year": end_year,
+                    "relevant_coursework": [],
+                })
+
+        return education

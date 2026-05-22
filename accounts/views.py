@@ -221,22 +221,25 @@ class MeView(APIView):
         request=inline_serializer(
             name='PatchMeRequest',
             fields={
-                'full_name':          serializers.CharField(required=False),
-                'summary':            serializers.CharField(required=False),
-                'bio':                serializers.CharField(required=False),
-                'headline':           serializers.CharField(required=False),
-                'location':           serializers.CharField(required=False),
-                'phone':              serializers.CharField(required=False),
-                'linkedin':           serializers.CharField(required=False),
-                'linkedin_url':       serializers.CharField(required=False),
-                'website':            serializers.CharField(required=False),
-                'portfolio_url':      serializers.CharField(required=False),
-                'skills':             serializers.JSONField(required=False),
-                'experience':         serializers.JSONField(required=False),
-                'education':          serializers.JSONField(required=False),
-                'preferences':        serializers.JSONField(required=False),
-                'job_preferences':    serializers.JSONField(required=False),
-                'onboarding_complete': serializers.BooleanField(required=False),
+                'full_name':             serializers.CharField(required=False),
+                'summary':               serializers.CharField(required=False),
+                'bio':                   serializers.CharField(required=False),
+                'headline':              serializers.CharField(required=False),
+                'location':              serializers.CharField(required=False),
+                'phone':                 serializers.CharField(required=False),
+                'linkedin':              serializers.CharField(required=False),
+                'linkedin_url':          serializers.CharField(required=False),
+                'github':                serializers.CharField(required=False),
+                'github_url':            serializers.CharField(required=False),
+                'website':               serializers.CharField(required=False),
+                'portfolio_url':         serializers.CharField(required=False),
+                'skills':                serializers.JSONField(required=False),
+                'experience':            serializers.JSONField(required=False),
+                'education':             serializers.JSONField(required=False),
+                'preferences':           serializers.JSONField(required=False),
+                'job_preferences':       serializers.JSONField(required=False),
+                'career_intelligence':   serializers.JSONField(required=False),
+                'onboarding_complete':   serializers.BooleanField(required=False),
             }
         ),
         responses={200: UserSerializer}
@@ -285,6 +288,12 @@ class MeView(APIView):
             profile.linkedin_url = linkedin_val
             profile_fields_changed.append('linkedin_url')
 
+        # Alias: github → github_url
+        github_val = data.get('github') or data.get('github_url')
+        if github_val is not None:
+            profile.github_url = github_val
+            profile_fields_changed.append('github_url')
+
         # Alias: website → portfolio_url
         website_val = data.get('website') or data.get('portfolio_url')
         if website_val is not None:
@@ -303,9 +312,20 @@ class MeView(APIView):
             profile.education = data['education']
             profile_fields_changed.append('education')
 
+        # career_intelligence — dedicated JSON field
+        if 'career_intelligence' in data:
+            profile.career_intelligence = data['career_intelligence']
+            profile_fields_changed.append('career_intelligence')
+
         # Alias: preferences → job_preferences
         prefs_val = data.get('preferences') or data.get('job_preferences')
         if prefs_val is not None:
+            # If career_intelligence is nested inside preferences (from old frontend), pull it out.
+            if isinstance(prefs_val, dict) and 'career_intelligence' in prefs_val:
+                ci = prefs_val.pop('career_intelligence', None)
+                if ci and 'career_intelligence' not in profile_fields_changed:
+                    profile.career_intelligence = ci
+                    profile_fields_changed.append('career_intelligence')
             profile.job_preferences = prefs_val
             profile_fields_changed.append('job_preferences')
 

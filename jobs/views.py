@@ -238,10 +238,12 @@ class ResumeParseView(APIView):
         - Headline:      populated from the first extracted job title.
         - bio:           populated from the extracted summary paragraph.
         - location:      populated from the first GPE/LOC entity.
+        - phone:         populated from the extracted phone number.
         - linkedin_url:  populated from the LinkedIn URL found in the resume.
         - portfolio_url: populated from the portfolio/website URL found in the resume.
-        - Skills:        append newly found skills (case-insensitive dedup).
+        - Skills:        append newly found skills (case-insensitive dedup, with type tag).
         - Experience:    append a stub entry for each unique new company found.
+        - Education:     populate from extracted education entries.
         """
         try:
             profile = user.profile
@@ -265,9 +267,11 @@ class ResumeParseView(APIView):
             s.get("name", "").lower() for s in (profile.skills or [])
         }
         new_skills = list(profile.skills or [])
+        hard_skill_names = set(s.lower() for s in extracted.get("hard_skills", []))
         for skill_name in extracted.get("skills", []):
             if skill_name.lower() not in existing_skill_names:
-                new_skills.append({"name": skill_name, "level": "intermediate"})
+                skill_type = "hard" if skill_name.lower() in hard_skill_names else "soft"
+                new_skills.append({"name": skill_name, "level": "intermediate", "type": skill_type})
                 existing_skill_names.add(skill_name.lower())
                 changed = True
         if changed:
@@ -290,6 +294,12 @@ class ResumeParseView(APIView):
         extracted_location = extracted.get("location")
         if extracted_location and not profile.location:
             profile.location = extracted_location
+            changed = True
+
+        # ── Phone ─────────────────────────────────────────────────────────
+        extracted_phone = extracted.get("phone")
+        if extracted_phone and not profile.phone:
+            profile.phone = extracted_phone
             changed = True
 
         # ── LinkedIn URL ──────────────────────────────────────────────────
@@ -326,10 +336,17 @@ class ResumeParseView(APIView):
         if changed:
             profile.experience = new_experience
 
+        # ── Education ─────────────────────────────────────────────────────
+        extracted_education = extracted.get("education", [])
+        if extracted_education and not profile.education:
+            profile.education = extracted_education
+            changed = True
+
         if changed:
             profile.save(update_fields=[
                 "skills", "headline", "experience", "bio",
-                "location", "linkedin_url", "portfolio_url", "updated_at",
+                "location", "phone", "linkedin_url", "portfolio_url",
+                "education", "updated_at",
             ])
 
         return {
@@ -338,11 +355,18 @@ class ResumeParseView(APIView):
             "headline": profile.headline,
             "bio": profile.bio,
             "location": profile.location,
+            "phone": profile.phone,
             "linkedin_url": profile.linkedin_url,
             "portfolio_url": profile.portfolio_url,
             "skills": profile.skills,
+            "hard_skills": extracted.get("hard_skills", []),
+            "soft_skills": extracted.get("soft_skills", []),
             "experience": profile.experience,
+            "education": profile.education,
+            "career_intelligence": extracted.get("career_intelligence", {}),
+            "job_titles": extracted.get("job_titles", []),
         }
+
 
 
 # ---------------------------------------------------------------------------

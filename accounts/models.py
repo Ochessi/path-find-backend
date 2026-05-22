@@ -95,6 +95,7 @@ class Profile(models.Model):
     )
     phone = models.CharField(max_length=30, blank=True)
     linkedin_url = models.URLField(max_length=500, blank=True)
+    github_url = models.URLField(max_length=500, blank=True)
     portfolio_url = models.URLField(max_length=500, blank=True)
     bio = models.TextField(blank=True)
 
@@ -118,6 +119,11 @@ class Profile(models.Model):
         default=dict,
         blank=True,
         help_text="Desired roles, locations, salary range, remote preference, etc.",
+    )
+    career_intelligence = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="{years_experience, primary_domain, specializations} extracted from resume or set by user.",
     )
 
     # ── Timestamps ───────────────────────────────────────────────────────────
