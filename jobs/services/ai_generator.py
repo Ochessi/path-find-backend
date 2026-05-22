@@ -1,7 +1,7 @@
 import json
 import logging
 from django.conf import settings
-import google.generativeai as genai
+import google.genai as genai
 
 logger = logging.getLogger(__name__)
 
