@@ -1,11 +1,9 @@
 import json
 import logging
 from django.conf import settings
-import google.generativeai as genai
+from google import genai
 
 logger = logging.getLogger(__name__)
-
-genai.configure(api_key=settings.GEMINI_API_KEY)
 
 
 def generate_application_content(profile, job_listing, resume_text: str = ""):
@@ -27,7 +25,8 @@ def generate_application_content(profile, job_listing, resume_text: str = ""):
 
     Returns a dict with the generated content.
     """
-    model = genai.GenerativeModel("gemini-2.5-flash")
+    # Initialize the new Google GenAI client
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
     # ── Skill name normalisation (skills may be dicts or plain strings) ──────
     raw_skills = profile.skills or []
@@ -113,8 +112,11 @@ Provide your response in EXACTLY this JSON format with no additional markdown, c
 """
 
     try:
-        response = model.generate_content(prompt)
-        text = response.text.strip()
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+        )
+        text = response.text.strip() if response.text else ""
 
         # Strip markdown fences if the model wraps output in them
         if text.startswith("```json"):
