@@ -130,6 +130,7 @@ class ApplicationSerializer(serializers.ModelSerializer):
             "resume",
             "cover_letter",
             "notes",
+            "ai_content",
             "applied_at",
             "created_at",
             "updated_at",

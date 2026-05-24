@@ -131,6 +131,47 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         serializer.save()
         return Response(ApplicationSerializer(application).data)
 
+    @action(detail=False, methods=["post"], url_path="get-or-create")
+    def get_or_create(self, request):
+        """
+        POST /api/jobs/applications/get-or-create/
+        Body: { "job_listing_id": <int> }
+        Returns the existing Application for this user+job, or creates a new one
+        with status=saved.  Used by the application page on load.
+        """
+        job_listing_id = request.data.get("job_listing_id")
+        if not job_listing_id:
+            return Response(
+                {"detail": "job_listing_id is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            job_listing = JobListing.objects.get(pk=job_listing_id)
+        except JobListing.DoesNotExist:
+            return Response({"detail": "Job not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        application, created = Application.objects.get_or_create(
+            user=request.user,
+            job_listing=job_listing,
+            defaults={"status": "saved"},
+        )
+        serializer = ApplicationSerializer(application)
+        return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    @action(detail=True, methods=["patch"], url_path="ai-content")
+    def update_ai_content(self, request, pk=None):
+        """
+        PATCH /api/jobs/applications/{id}/ai-content/
+        Body: { "tailored_bullets": "...", "cover_letter": "...", "form_fields": {...} }
+        Merges the supplied keys into the application's ai_content JSON field.
+        """
+        application = self.get_object()
+        existing = application.ai_content or {}
+        existing.update(request.data)
+        application.ai_content = existing
+        application.save(update_fields=["ai_content", "updated_at"])
+        return Response(ApplicationSerializer(application).data)
+
 
 # ---------------------------------------------------------------------------
 # Resume Parsing Pipeline
@@ -832,7 +873,7 @@ class ApplicationAIGenerateView(APIView):
             )
 
         from jobs.tasks import generate_application_content_task
-        task = generate_application_content_task.delay(request.user.id, job_listing.id)
+        task = generate_application_content_task.delay(request.user.id, job_listing.id, application_id if application_id else None)
 
         return Response(
             {"task_id": task.id, "status": "processing"},

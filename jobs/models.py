@@ -295,6 +295,13 @@ class Application(models.Model):
         blank=True,
         help_text="Private notes about this application (interviews, contacts, etc.).",
     )
+    # Stores AI-generated tailored_bullets, cover_letter, and form_fields.
+    # Populated by generate_application_content_task; editable by the user.
+    ai_content = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="AI-generated application content (tailored_bullets, cover_letter, form_fields).",
+    )
     applied_at = models.DateTimeField(
         null=True,
         blank=True,

@@ -5,30 +5,43 @@ import google.generativeai as genai
 
 logger = logging.getLogger(__name__)
 
-# Configure the API key
 genai.configure(api_key=settings.GEMINI_API_KEY)
+
 
 def generate_application_content(profile, job_listing):
     """
     Constructs a prompt using the user's profile and the target job listing,
-    then calls Gemini to generate tailored resume bullet points and a cover letter.
-    Returns a dictionary with the generated content.
+    then calls Gemini to generate:
+      - tailored_bullets  : rewritten experience bullet points
+      - cover_letter      : a full personalised cover letter
+      - form_fields       : AI answers for common job-application form questions
+
+    Returns a dict with the generated content.
     """
     model = genai.GenerativeModel("gemini-2.5-flash")
 
-    # Serialize profile data for the prompt
+    # ── Skill name normalisation (skills may be dicts or plain strings) ──────
+    raw_skills = profile.skills or []
+    skill_names = [
+        s.get("name", "") if isinstance(s, dict) else str(s)
+        for s in raw_skills
+    ]
+
     profile_text = f"""
+Name: {getattr(profile.user, 'full_name', '')}
+Email: {getattr(profile.user, 'email', '')}
 Headline: {profile.headline}
 Location: {profile.location}
 Bio: {profile.bio}
-Skills: {json.dumps(profile.skills, indent=2)}
-Experience: {json.dumps(profile.experience, indent=2)}
-Education: {json.dumps(profile.education, indent=2)}
+Skills: {', '.join(filter(None, skill_names))}
+Experience: {json.dumps(profile.experience or [], indent=2)}
+Education: {json.dumps(profile.education or [], indent=2)}
 """
 
     job_text = f"""
 Title: {job_listing.title}
 Company: {job_listing.company}
+Location: {job_listing.location}
 Description: {job_listing.description}
 """
 
@@ -42,36 +55,62 @@ Candidate Profile:
 Target Job:
 {job_text}
 
-Based on this information, perform two tasks:
-1. Rewrite the candidate's experience bullet points to emphasize skills and achievements most relevant to the target job. Do not invent new experience, but reframe existing experience to align with the job requirements. Keep it professional.
-2. Write a tailored, professional cover letter for the candidate applying to this specific job. The cover letter should highlight the candidate's most relevant skills and express genuine interest in the role and company.
+Perform three tasks:
 
-Provide your response in exactly this JSON format, with no additional markdown formatting, no code blocks, and no extra text:
+1. **tailored_bullets**: Rewrite the candidate's experience entries as polished bullet points that emphasise skills and achievements most relevant to this job. Do NOT invent experience. Keep it professional.
+
+2. **cover_letter**: Write a tailored, professional cover letter (3–4 paragraphs) for the candidate applying to this specific role. Highlight the most relevant skills and express genuine interest in the company.
+
+3. **form_fields**: Generate AI-suggested answers for common job application form questions as a JSON object with these keys:
+   - "why_us": Why do you want to work at {job_listing.company}? (2–3 sentences)
+   - "years_experience": Years of relevant experience (a short string, e.g. "5+")
+   - "salary_expectation": A reasonable salary expectation based on the role and seniority (a short string)
+   - "earliest_start": Earliest available start date (e.g. "2 weeks notice")
+   - "visa_sponsorship": Whether the candidate likely needs visa sponsorship ("No" or "Yes, may require")
+   - "work_authorization": Work authorization status ("Authorized to work" or "Requires sponsorship")
+
+Provide your response in EXACTLY this JSON format with no additional markdown, code blocks, or extra text:
 {{
-  "tailored_bullets": "A formatted string containing the revised experience bullet points.",
-  "cover_letter": "A formatted string containing the complete cover letter."
+  "tailored_bullets": "A formatted string with the revised experience bullet points.",
+  "cover_letter": "A formatted string with the complete cover letter.",
+  "form_fields": {{
+    "why_us": "...",
+    "years_experience": "...",
+    "salary_expectation": "...",
+    "earliest_start": "...",
+    "visa_sponsorship": "...",
+    "work_authorization": "..."
+  }}
 }}
 """
 
     try:
         response = model.generate_content(prompt)
         text = response.text.strip()
-        
-        # Remove markdown code blocks if the model still returns them
+
+        # Strip markdown fences if the model wraps output in them
         if text.startswith("```json"):
             text = text[7:]
         if text.startswith("```"):
             text = text[3:]
         if text.endswith("```"):
             text = text[:-3]
-        
+
         content = json.loads(text.strip())
         return content
+
     except Exception as e:
-        logger.error(f"Error generating application content: {e}")
-        # Provide a fallback structure in case of failure
+        logger.error("Error generating application content: %s", e)
         return {
             "tailored_bullets": "Failed to generate tailored bullets.",
             "cover_letter": "Failed to generate cover letter.",
-            "error": str(e)
+            "form_fields": {
+                "why_us": "",
+                "years_experience": "",
+                "salary_expectation": "",
+                "earliest_start": "2 weeks notice",
+                "visa_sponsorship": "No",
+                "work_authorization": "Authorized to work",
+            },
+            "error": str(e),
         }

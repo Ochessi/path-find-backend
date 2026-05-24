@@ -323,9 +323,9 @@ def parse_resume_task(self, user_id: int, file_base64: str, content_type: str, o
     }
 
 @shared_task(bind=True)
-def generate_application_content_task(self, user_id: int, job_listing_id: int) -> dict:
+def generate_application_content_task(self, user_id: int, job_listing_id: int, application_id=None) -> dict:
     from django.contrib.auth import get_user_model
-    from jobs.models import JobListing
+    from jobs.models import JobListing, Application
     from jobs.services.ai_generator import generate_application_content
     
     User = get_user_model()
@@ -337,4 +337,14 @@ def generate_application_content_task(self, user_id: int, job_listing_id: int) -
         return {"error": str(exc)}
         
     generated_content = generate_application_content(profile, job_listing)
+
+    # Persist into Application.ai_content so the frontend can reload it.
+    if application_id:
+        try:
+            application = Application.objects.get(pk=application_id, user=user)
+            application.ai_content = generated_content
+            application.save(update_fields=["ai_content", "updated_at"])
+        except Application.DoesNotExist:
+            pass
+
     return generated_content
