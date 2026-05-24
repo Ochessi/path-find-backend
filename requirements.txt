@@ -38,7 +38,7 @@ en_core_web_md @ https://github.com/explosion/spacy-models/releases/download/en_
 filelock==3.25.2
 fsspec==2026.2.0
 google-auth==2.49.2
-google-genai==0.3.0
+google-genai==2.6.0
 greenlet==3.5.0
 gunicorn==25.3.0
 h11==0.16.0
