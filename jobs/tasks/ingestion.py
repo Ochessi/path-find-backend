@@ -275,9 +275,9 @@ def recompute_all_embeddings() -> dict:
 @shared_task(bind=True)
 def parse_resume_task(self, user_id: int, file_base64: str, content_type: str, original_filename: str = "resume") -> dict:
     import base64
-    from io import BytesIO
     from django.core.files.base import ContentFile
     from django.contrib.auth import get_user_model
+    from django.conf import settings
     from jobs.parsers import ResumeParser
     from jobs.views import ResumeParseView
     from jobs.models import Document, DocumentType
@@ -297,20 +297,55 @@ def parse_resume_task(self, user_id: int, file_base64: str, content_type: str, o
         logger.exception("Resume parsing failed in task: %s", exc)
         return {"error": "Resume parsing failed. Please try again."}
 
+    # ── Grab the raw text so the AI generator can use it ─────────────────────
+    resume_text: str = extracted.get("text", "") or ""
+
     # ── Save as Master Resume Document ──────────────────────────────────────
     # Demote any previous master resume for this user first.
     Document.objects.filter(user=user, is_master=True).update(is_master=False)
 
-    # Save the raw file bytes to the document FileField (local storage).
+    storage_key = ""
+    file_url = ""
+
+    # ── Try to upload to Supabase Storage ────────────────────────────────────
+    supabase_url = getattr(settings, "SUPABASE_URL", "")
+    supabase_key = getattr(settings, "SUPABASE_SERVICE_ROLE_KEY", "")
+
+    if supabase_url and supabase_key:
+        try:
+            from jobs.services.supabase_storage import upload_resume as _upload
+            storage_key, file_url = _upload(
+                user_id=user.pk,
+                file_bytes=file_bytes,
+                filename=original_filename,
+                content_type=content_type,
+            )
+            logger.info(
+                "parse_resume_task: uploaded resume for user %s → %s",
+                user.pk, storage_key,
+            )
+        except Exception as exc:
+            logger.warning(
+                "parse_resume_task: Supabase upload failed (falling back to local): %s", exc
+            )
+
+    # Build the Document record, using Supabase URL when available, falling
+    # back to Django's local FileField otherwise.
     doc = Document(
         user=user,
         file_name=original_filename,
-        file_url="",          # no cloud URL yet; file field holds the bytes
+        file_url=file_url,
+        storage_key=storage_key,
         doc_type=DocumentType.RESUME,
         is_master=True,
         is_ai_generated=False,
+        resume_text=resume_text,
     )
-    doc.file.save(original_filename, ContentFile(file_bytes), save=False)
+
+    if not file_url:
+        # Supabase not configured / upload failed — keep a local copy.
+        doc.file.save(original_filename, ContentFile(file_bytes), save=False)
+
     doc.save()
 
     # ── Merge extracted data into the user's Profile ─────────────────────────
@@ -325,9 +360,9 @@ def parse_resume_task(self, user_id: int, file_base64: str, content_type: str, o
 @shared_task(bind=True)
 def generate_application_content_task(self, user_id: int, job_listing_id: int, application_id=None) -> dict:
     from django.contrib.auth import get_user_model
-    from jobs.models import JobListing, Application
+    from jobs.models import JobListing, Application, Document, DocumentType
     from jobs.services.ai_generator import generate_application_content
-    
+
     User = get_user_model()
     try:
         user = User.objects.get(pk=user_id)
@@ -335,8 +370,63 @@ def generate_application_content_task(self, user_id: int, job_listing_id: int, a
         profile = user.profile
     except Exception as exc:
         return {"error": str(exc)}
-        
-    generated_content = generate_application_content(profile, job_listing)
+
+    # ── Fetch the user's master resume text ───────────────────────────────────
+    # We prefer the stored Supabase-uploaded resume text. If the Document has
+    # resume_text populated (set during parse_resume_task), use it directly.
+    # Fallback: try to re-download from Supabase and extract text on the fly.
+    resume_text = ""
+    try:
+        master_doc = (
+            Document.objects
+            .filter(user=user, is_master=True, doc_type=DocumentType.RESUME)
+            .order_by("-created_at")
+            .first()
+        )
+        if master_doc:
+            if master_doc.resume_text:
+                # Best path: text was saved at parse time
+                resume_text = master_doc.resume_text
+            elif master_doc.storage_key:
+                # Fallback: re-download from Supabase and extract
+                from jobs.services.supabase_storage import download_file
+                from jobs.parsers import ResumeParser
+                file_bytes = download_file(master_doc.storage_key)
+                if file_bytes:
+                    parser = ResumeParser()
+                    # Guess content type from filename
+                    ct = "application/pdf"
+                    fn = (master_doc.file_name or "").lower()
+                    if fn.endswith(".docx"):
+                        ct = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    elif fn.endswith(".txt"):
+                        ct = "text/plain"
+                    extracted = parser.parse(file_bytes, ct)
+                    resume_text = extracted.get("text", "") or ""
+                    # Back-fill the resume_text field so we avoid re-download next time
+                    if resume_text:
+                        master_doc.resume_text = resume_text
+                        master_doc.save(update_fields=["resume_text"])
+            elif master_doc.file:
+                # Local file fallback (legacy / dev without Supabase)
+                from jobs.parsers import ResumeParser
+                try:
+                    file_bytes = master_doc.file.read()
+                    parser = ResumeParser()
+                    ct = "application/pdf"
+                    fn = (master_doc.file_name or "").lower()
+                    if fn.endswith(".docx"):
+                        ct = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    elif fn.endswith(".txt"):
+                        ct = "text/plain"
+                    extracted = parser.parse(file_bytes, ct)
+                    resume_text = extracted.get("text", "") or ""
+                except Exception as re_exc:
+                    logger.warning("Could not extract text from local resume file: %s", re_exc)
+    except Exception as exc:
+        logger.warning("generate_application_content_task: could not fetch resume text: %s", exc)
+
+    generated_content = generate_application_content(profile, job_listing, resume_text=resume_text)
 
     # Persist into Application.ai_content so the frontend can reload it.
     if application_id:

@@ -393,6 +393,25 @@ EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 # ---------------------------------------------------------------------------
+# Supabase Storage — resume / document file hosting
+#
+# When SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set, the resume-parse
+# pipeline uploads files to the Supabase Storage bucket (SUPABASE_STORAGE_BUCKET)
+# and stores the public URL + storage key on the Document record.
+#
+# If these variables are absent, uploads fall back to local Django FileField
+# storage (useful for local dev without a Supabase project).
+#
+# Required env vars:
+#   SUPABASE_URL               — https://<project-ref>.supabase.co
+#   SUPABASE_SERVICE_ROLE_KEY  — service_role secret (NOT the anon key)
+#   SUPABASE_STORAGE_BUCKET    — bucket name (default: "resumes")
+# ---------------------------------------------------------------------------
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+SUPABASE_STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "resumes")
+
+# ---------------------------------------------------------------------------
 # Browserbase — remote browser sessions for portal auto-submission
 # ---------------------------------------------------------------------------
 # Sign up at https://browserbase.com to obtain these credentials.

@@ -8,13 +8,22 @@ logger = logging.getLogger(__name__)
 genai.configure(api_key=settings.GEMINI_API_KEY)
 
 
-def generate_application_content(profile, job_listing):
+def generate_application_content(profile, job_listing, resume_text: str = ""):
     """
-    Constructs a prompt using the user's profile and the target job listing,
-    then calls Gemini to generate:
+    Constructs a prompt using the user's profile (and optionally their raw
+    resume text) and the target job listing, then calls Gemini to generate:
       - tailored_bullets  : rewritten experience bullet points
       - cover_letter      : a full personalised cover letter
       - form_fields       : AI answers for common job-application form questions
+
+    Parameters
+    ----------
+    profile      : accounts.Profile — the authenticated user's profile.
+    job_listing  : jobs.JobListing  — the target job.
+    resume_text  : str              — (optional) raw text extracted from the
+                   user's uploaded master resume.  When provided it is used as
+                   the primary source so the AI can see the *actual* content
+                   of their resume rather than only the structured JSON summary.
 
     Returns a dict with the generated content.
     """
@@ -27,7 +36,26 @@ def generate_application_content(profile, job_listing):
         for s in raw_skills
     ]
 
-    profile_text = f"""
+    # ── Build the resume / candidate section ──────────────────────────────────
+    # Prefer the raw resume text when available — it gives the model far more
+    # signal (formatting, exact wording, bullet structure, etc.) than the
+    # structured JSON summary derived from NLP extraction.
+    if resume_text and resume_text.strip():
+        candidate_section = f"""
+Name: {getattr(profile.user, 'full_name', '')}
+Email: {getattr(profile.user, 'email', '')}
+Headline: {profile.headline}
+
+--- FULL RESUME TEXT (use this as the primary source) ---
+{resume_text.strip()}
+--- END RESUME ---
+
+Additional structured data (use to supplement, not override, the resume):
+Skills: {', '.join(filter(None, skill_names))}
+Education: {json.dumps(profile.education or [], indent=2)}
+"""
+    else:
+        candidate_section = f"""
 Name: {getattr(profile.user, 'full_name', '')}
 Email: {getattr(profile.user, 'email', '')}
 Headline: {profile.headline}
@@ -50,16 +78,16 @@ You are an expert career coach and professional resume writer.
 I have a candidate's profile and a target job description.
 
 Candidate Profile:
-{profile_text}
+{candidate_section}
 
 Target Job:
 {job_text}
 
 Perform three tasks:
 
-1. **tailored_bullets**: Rewrite the candidate's experience entries as polished bullet points that emphasise skills and achievements most relevant to this job. Do NOT invent experience. Keep it professional.
+1. **tailored_bullets**: Rewrite the candidate's experience entries as polished bullet points that emphasise skills and achievements most relevant to this job. Do NOT invent experience. Keep it professional and grounded in their actual resume.
 
-2. **cover_letter**: Write a tailored, professional cover letter (3–4 paragraphs) for the candidate applying to this specific role. Highlight the most relevant skills and express genuine interest in the company.
+2. **cover_letter**: Write a tailored, professional cover letter (3–4 paragraphs) for the candidate applying to this specific role. Highlight the most relevant skills, reference specific experiences from their resume, and express genuine interest in the company.
 
 3. **form_fields**: Generate AI-suggested answers for common job application form questions as a JSON object with these keys:
    - "why_us": Why do you want to work at {job_listing.company}? (2–3 sentences)

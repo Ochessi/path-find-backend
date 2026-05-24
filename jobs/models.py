@@ -226,6 +226,18 @@ class Document(models.Model):
         help_text="Raw uploaded file (local storage fallback when no cloud bucket is set).",
     )
 
+    # Plain-text content extracted from the resume by the NLP parser.
+    # Stored so the AI generator can use actual resume text rather than
+    # only the structured profile JSON, enabling richer tailored output.
+    resume_text = models.TextField(
+        blank=True,
+        default="",
+        help_text=(
+            "Extracted plain-text content of the resume. "
+            "Populated at upload time by the NLP parser."
+        ),
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
