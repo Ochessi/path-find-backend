@@ -20,6 +20,8 @@ router.register(r"documents", DocumentViewSet, basename="document")
 router.register(r"applications", ApplicationViewSet, basename="application")
 
 urlpatterns = [
+    # AI Content Generation for applications (must be before router)
+    path("applications/generate/", ApplicationAIGenerateView.as_view(), name="application-generate"),
     path("", include(router.urls)),
     # Resume parsing pipeline
     path("resume/parse/", ResumeParseView.as_view(), name="resume-parse"),
@@ -27,8 +29,6 @@ urlpatterns = [
     path("feed/", CuratedFeedView.as_view(), name="curated-feed"),
     # Admin: embedding pipeline health-check & manual backfill trigger
     path("embedding-status/", EmbeddingStatusView.as_view(), name="embedding-status"),
-    # AI Content Generation for applications
-    path("applications/generate/", ApplicationAIGenerateView.as_view(), name="application-generate"),
     # Portal submission — triggers Browserbase automation, returns task_id for polling
     path("applications/<int:pk>/submit-portal/", SubmitPortalView.as_view(), name="application-submit-portal"),
     # Task Status checking
